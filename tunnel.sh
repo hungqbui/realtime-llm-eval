@@ -1,0 +1,1 @@
+cloudflared tunnel run --url http://localhost:5173
