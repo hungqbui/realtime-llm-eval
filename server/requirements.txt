@@ -1,5 +1,6 @@
 flask
 flask-cors
-openai-whisper
-soundfile
-run
+numpy
+Flask-SocketIO
+eventlet
+diart

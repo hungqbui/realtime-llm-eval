@@ -1,130 +1,128 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { socket } from './utils/socket'; 
 import './App.css'
 
 function App() {
 
-  const [stream, setStream] = useState<any>(null)
-  const [source, setSource] = useState<any>(null)
-  const [context, setContext] = useState<any>(null)
-  const [isRecording, setIsRecording] = useState(false)
-  const [processorNode, setProcessorNode] = useState<any>(null)
-  const [buffer, setBuffer] = useState<Float32Array[]>([])
+  const audioCtx = useRef<AudioContext | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const processor = useRef<ScriptProcessorNode | null>(null);
+  const input = useRef<MediaStreamAudioSourceNode | null>(null);
+  const pcmChunks = useRef<Int16Array[]>([]);
+  const stream = useRef<MediaStream | null>(null);
+  const [answer, setAnswer] = useState<string>("");
+  const canvas = useRef<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
-
-    navigator.mediaDevices.getUserMedia({ video: true})
-      .then((stream) => {
-        const video = document.createElement('video')
-        video.srcObject = stream
-        video.play()
-        document.body.appendChild(video)
-      })
-
-  }, [])
-
-  function mergeAndClear(chunks : any) {
-    const length = chunks.reduce((sum : any, c : any) => sum + c.length, 0);
-    const out = new Float32Array(length);
-    let offset = 0;
-    for (let c of chunks) {
-      out.set(c, offset);
-      offset += c.length;
-    }
-    chunks.length = 0;
-    return out;
-  }
-
-  function floatTo16BitPCM(input : Float32Array) {
-    const out = new DataView(new ArrayBuffer(input.length * 2));
-    input.forEach((sample, i) => {
-      let s = Math.max(-1, Math.min(1, sample));
-      out.setInt16(i*2, s < 0 ? s*0x8000 : s*0x7FFF, true);
+    socket.on("connect", () => {
+      console.log("Connected to server");
     });
-    return out;
-  }
 
-  function encodeWAV(samples : Float32Array) {
-    const data = floatTo16BitPCM(samples);
-    const header = new ArrayBuffer(44);
-    const view = new DataView(header);
-    /* write “RIFF”, file length, “WAVE”, fmt-chunk, etc… */
-    // (do the usual WAV-header boilerplate)
-    return new Blob([header, data], { type: "audio/wav" });
-  }
-
-  async function sendChunk(float32Chunk : Float32Array) {
-    const wav = encodeWAV(float32Chunk);
-    // either via fetch:
-    const res = await fetch("api/transcribe", {
-      method: "POST",
-      headers: { "Content-Type": "audio/wav" },
-      body: wav
+    socket.on("disconnect", () => {
+      console.log("Disconnected from server");
     });
-    const ans = await res.json();
-    console.log(ans);
-  }
 
-  useEffect(() => {
+    socket.on("audio_ans", (data) => {
+      setAnswer(data["res"]);
+    })
 
-    if (!stream || !context || !source) return
-
-    const processor = context.createScriptProcessor(4096, 1, 1)
-    source.connect(processor)
-    processor.connect(context.destination)
-
-    setBuffer([])
-
-    processor.onaudioprocess = (e : any) => {
-      setBuffer((prevBuffer) => {
-
-        const next = [...prevBuffer, new Float32Array(e.inputBuffer.getChannelData(0))]
-        const totalSamples = next.reduce((acc, curr) => acc + curr.length, 0)
-        if (totalSamples >= context.sampleRate * 1) {
-          const chunk = mergeAndClear(next);
-          sendChunk(chunk);
-        }
-        return next;
-      });
+    return () => {
+      socket.off("connect");
+      socket.off("disconnect");
+      socket.off("audio_ans");
     }
-    setProcessorNode(processor)
 
-  }, [stream, context, source])
+  }, []);
+  function drawFloat32Wave(canvas : HTMLCanvasElement, floatArray: Float32Array) {
+    const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
+    const width = canvas.width;
+    const height = canvas.height;
 
-  async function startRecording() {
+    ctx.clearRect(0, 0, width, height);
+    ctx.beginPath();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'lime';
 
-    const ctx = new AudioContext({ sampleRate: 16000 });
+    const step = width / floatArray.length;
+    for (let i = 0; i < floatArray.length; i++) {
+      const x = i * step;
+      const y = height / 2 - (floatArray[i] * height / 2);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
 
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-    setStream(stream);
-    setContext(ctx);
-    setSource(ctx.createMediaStreamSource(stream));
-
+    ctx.stroke();
   }
-  function stopRecording() {
-    if (!context || !processorNode || !source) return
 
-    processorNode.disconnect();
-    source.disconnect();
-    context.close();
+  const startRecording = async () => {
+    stream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-    setProcessorNode(null);
-    setSource(null);
-    setContext(null);
+
+    audioCtx.current = new AudioContext({ sampleRate: 16000 });
+    audioCtx.current.resume();
+
+    input.current = audioCtx.current.createMediaStreamSource(stream.current);
+    processor.current = audioCtx.current.createScriptProcessor(4096, 1, 1);
     
-    // stop all mic tracks
-    stream.getTracks().forEach((t: MediaStreamTrack) => t.stop());
+    processor.current.onaudioprocess = async (e) => {
+      const data = e.inputBuffer.getChannelData(0);
+      console.log(Math.max(...data), Math.min(...data));
+      drawFloat32Wave(canvas.current as HTMLCanvasElement, data);
+      const int16 = convertFloat32ToInt16(data);
+      pcmChunks.current.push(int16);
+      
+      sendChunkToServer(data);
+    };
+    input.current?.connect(processor.current);
+    processor.current?.connect(audioCtx.current.destination);
+    setIsRecording(true);
+  }
+
+  function convertFloat32ToInt16(buffer : Float32Array) {
+    let l = buffer.length;
+    let result = new Int16Array(l);
+    for (let i = 0; i < l; i++) {
+      result[i] = Math.round(buffer[i] * 0x7FFF);
+    }
+    return result;
+  }
+
+  const stopRecording = () => {
+    processor.current?.disconnect();
+    input.current?.disconnect();
+    audioCtx.current?.close();
+    stream.current?.getTracks().forEach(track => track.stop());
+
+    setIsRecording(false);
+  }
+
+  function sendChunkToServer(int16Chunk : any) {
+    const blob = new Blob([int16Chunk], { type: 'application/octet-stream' });
+
+    // const response = await fetch("/api/transcribe", {
+    //   method: "POST",
+    //   headers: {
+    //     "Content-Type": "application/octet-stream",
+    //   },
+    //   body: blob,
+    // })
+
+    socket.emit("audio", {
+      "audio_data": blob,
+      "session_id": "1234",
+    });
+
   }
 
   return (
     <>
       <button onClick={async () => {
-        if (!isRecording) await startRecording();
+        if (!isRecording) startRecording();
         else stopRecording();
-        setIsRecording(!isRecording)
       }}>
         { isRecording ? "Stop" : "Start" }
       </button>
+      <p>Answer: {answer}</p>
+      <canvas ref={canvas} width={800} height={400} style={{ border: "1px solid black" }} />
     </>
   )
 }
