@@ -44,7 +44,7 @@ def handle_audio(data):
     buffer[session_id].append(audio_data)
 
     processed = np.frombuffer(b"".join(buffer[session_id]), dtype=np.float32)
-
+    processed = processed.astype(np.float16)
 
     segments, _ = model.transcribe(processed, beam_size=5, language="en")
 
