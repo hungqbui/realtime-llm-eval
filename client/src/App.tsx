@@ -22,7 +22,7 @@ function App() {
       console.log("Disconnected from server");
     });
 
-    socket.on("audio_ans", (data) => {
+    socket.on("audio_ans", (data : any) => {
       setAnswer(data["res"]);
     })
 
