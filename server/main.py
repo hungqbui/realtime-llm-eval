@@ -5,9 +5,6 @@ import numpy as np
 import wave
 import subprocess
 from flask_socketio import SocketIO, emit
-from whisperlivekit import WhisperLiveKit
-from whisperlivekit.audio_processor import AudioProcessor
-import asyncio
 from faster_whisper import WhisperModel
 
 
