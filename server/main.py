@@ -19,7 +19,7 @@ app.config["SESSION_PERMANENT"] = False
 app.config["SECRET_KEY"] = "your_secret"
 
 socketio = SocketIO(app, cors_allowed_origins="*")
-model = WhisperModel("base", device="auto", compute_type="int16")
+model = WhisperModel("base", device="cuda", compute_type="float16")
 
 buffer = {}
 
@@ -45,17 +45,8 @@ def handle_audio(data):
 
     processed = np.frombuffer(b"".join(buffer[session_id]), dtype=np.float32)
 
-    int16 = (processed * 32767).astype(np.int16)
 
-    print(max(int16), min(int16))
-
-    with wave.open(f"audio_uploads/audio{session_id}.wav", "wb") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(16000)
-        wf.writeframes(int16.tobytes())
-
-    segments, _ = model.transcribe(int16, beam_size=5, language="en")
+    segments, _ = model.transcribe(processed, beam_size=5, language="en")
 
     for segment in segments:
         print(f"Segment: {segment.text}")
