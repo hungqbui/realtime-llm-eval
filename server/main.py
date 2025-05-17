@@ -16,7 +16,7 @@ app.config["SESSION_PERMANENT"] = False
 app.config["SECRET_KEY"] = "your_secret"
 
 socketio = SocketIO(app, cors_allowed_origins="*")
-model = WhisperModel("base", device="cuda", compute_type="float16")
+model = WhisperModel("base", device="auto", compute_type="int8")
 
 buffer = {}
 
@@ -46,7 +46,8 @@ def handle_audio(data):
     segments, _ = model.transcribe(processed, beam_size=5, language="en")
 
     for segment in segments:
-        print(f"Segment: {segment.text}")
+        emit("audio_ans", { "res" : segment.text })
+
 
 
 if __name__ == "__main__":
