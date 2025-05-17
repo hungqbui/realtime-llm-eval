@@ -4,3 +4,4 @@ numpy
 Flask-SocketIO
 eventlet
 diart
+faster-whisper
