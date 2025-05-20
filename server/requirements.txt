@@ -1,7 +1,8 @@
-flask
-flask-cors
+quart
+quart-cors
+python-socketio
 numpy
-Flask-SocketIO
 eventlet
 diart
 faster-whisper
+uvicorn
