@@ -30,7 +30,7 @@ def disconnect(sid):
 @sio.on("audio")
 async def handle_audio(sid, data):
     try:
-        pcm = np.frombuffer(data["audio_data"], dtype=np.float32)
+        pcm = (np.frombuffer(data["audio_data"], dtype=np.float32) * 32767).astype(np.int16)
         await audio_queue.put(pcm)
     except Exception as e:
         print(f"Error processing audio: {e}")
@@ -46,7 +46,7 @@ PROMPT_WORD_COUNT = 200                # how many words to keep as context
 
 async def transcribe():
 
-    buffer = np.zeros((0,), dtype=np.float32)
+    buffer = np.zeros((0,), dtype=np.int16)
 
     while True:
         if audio_queue.empty():
