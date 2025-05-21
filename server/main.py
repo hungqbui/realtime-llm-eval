@@ -38,15 +38,17 @@ async def handle_audio(sid, data):
 
 
 SAMPLE_RATE       = 16_000
-MIN_CHUNK_SIZE    = 2               # seconds
+MIN_CHUNK_SIZE    = 1               # seconds
 CHUNK_SIZE        = int(SAMPLE_RATE * MIN_CHUNK_SIZE)
-USE_VAD           = True              # disable VAD for fluent speech
 PROMPT_WORD_COUNT = 10                # how many words to keep as context
 
 model = WhisperModel("tiny.en", device="auto", compute_type="int8")
 
+prompt = ""
+
 async def transcribe():
-    prompt = ""
+    global prompt
+
     while True:
 
         buffer = np.zeros((0,), dtype=np.float32)
@@ -63,7 +65,6 @@ async def transcribe():
             buffer,
             language="en",
             beam_size=5,
-            initial_prompt=prompt,
             condition_on_previous_text=True,
         )
         # 3) Flatten into a list of word-timestamp objects
@@ -72,10 +73,8 @@ async def transcribe():
             cur.append(seg.text)
 
         await sio.emit("audio_ans", {"text": " ".join(cur)})
-
-        prompt = prompt + " " + " ".join(cur)
-        prompt = " ".join(prompt.split()[-PROMPT_WORD_COUNT:])
-
+        prompt += " ".join(cur) + " "
+        print(prompt)
         await asyncio.sleep(0.01)
         # await save_audio()
 
