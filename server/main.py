@@ -18,8 +18,6 @@ audio_queue = asyncio.Queue()
 overall_buffer = asyncio.Queue()
 
 
-
-
 @sio.event
 def connect(sid, environ):
     print("Client connected")
@@ -31,9 +29,8 @@ def disconnect(sid):
 
 @sio.on("audio")
 async def handle_audio(sid, data):
-
     try:
-        pcm = (np.frombuffer(data["audio_data"], dtype=np.float32) * 32768).astype(np.int16)
+        pcm = np.frombuffer(data["audio_data"], dtype=np.float32)
         await audio_queue.put(pcm)
     except Exception as e:
         print(f"Error processing audio: {e}")
@@ -41,9 +38,9 @@ async def handle_audio(sid, data):
 
 
 SAMPLE_RATE       = 16_000
-MIN_CHUNK_SIZE    = 0.5                # seconds
+MIN_CHUNK_SIZE    = 2                # seconds
 CHUNK_SIZE        = int(SAMPLE_RATE * MIN_CHUNK_SIZE)
-USE_VAD           = False              # disable VAD for fluent speech
+USE_VAD           = True              # disable VAD for fluent speech
 PROMPT_WORD_COUNT = 200                # how many words to keep as context
 
 
@@ -54,7 +51,11 @@ async def transcribe():
     prompt           = ""
 
     while True:
-        while buffer.shape[0] < CHUNK_SIZE:
+        while buffer.shape[0] < CHUNK_SIZE or audio_queue.empty():
+            if audio_queue.empty():
+                await asyncio.sleep(0.01)
+                continue
+
             pcm    = await audio_queue.get()
             buffer = np.concatenate((buffer, pcm))
 
@@ -68,12 +69,13 @@ async def transcribe():
             condition_on_previous_text=True,
             vad_filter=USE_VAD,
         )
-
         # 3) Flatten into a list of word-timestamp objects
         words = []
         for seg in segments:
             for w in seg.words:
-                words.append(w)   # w.word, w.start, w.end
+                words.append(w)
+                print(w.word)   # w.word, w.start, w.end
+
 
         # 4) LocalAgreement-2: compare this run vs the previous run
         if prev_words is not None:
@@ -89,11 +91,12 @@ async def transcribe():
             if stable_len > last_emitted_cnt:
                 new_segment = " ".join(w.word for w in words[last_emitted_cnt:stable_len])
                 await sio.emit("transcript", {"text": new_segment})
-
                 # update counters & prompt context
                 last_emitted_cnt = stable_len
                 confirmed_words  = [w.word for w in words[:stable_len]]
                 prompt = " ".join(confirmed_words[-PROMPT_WORD_COUNT:])
+
+                print(prompt)
 
                 # 6) Trim the audio buffer up to the last confirmed timestamp
                 last_ts       = words[stable_len-1].end
