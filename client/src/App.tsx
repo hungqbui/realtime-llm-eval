@@ -56,7 +56,6 @@ function App() {
   const startRecording = async () => {
     stream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-
     audioCtx.current = new AudioContext({ sampleRate: 16000 });
     audioCtx.current.resume();
 
@@ -75,6 +74,7 @@ function App() {
     input.current?.connect(processor.current);
     processor.current?.connect(audioCtx.current.destination);
     setIsRecording(true);
+    socket.emit("start")
   }
 
   function convertFloat32ToInt16(buffer : Float32Array) {
@@ -91,6 +91,8 @@ function App() {
     input.current?.disconnect();
     audioCtx.current?.close();
     stream.current?.getTracks().forEach(track => track.stop());
+
+    socket.emit("stop")
 
     setIsRecording(false);
   }

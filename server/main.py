@@ -16,7 +16,7 @@ model = WhisperModel("tiny", device="auto", compute_type="int8")
 
 audio_queue = asyncio.Queue()
 overall_buffer = asyncio.Queue()
-
+transcribe_task = None
 
 @sio.event
 def connect(sid, environ):
@@ -119,11 +119,31 @@ async def save_audio():
         wf.writeframes(b"".join(local))
         
 
-async def start_up():
-    loop = asyncio.get_event_loop()
-    loop.create_task(transcribe())
+@sio.on("start")
+async def start_up(sid):
+    global transcribe_task, audio_queue
 
-app = socketio.ASGIApp(sio, app, on_startup=start_up)
+    audio_queue = asyncio.Queue()
+    transcribe_task = asyncio.create_task(transcribe())
+
+@sio.on("stop")
+async def handle_stop(sid):
+    global transcribe_task, audio_queue
+    # 1) cancel the running transcription Task
+    if transcribe_task and not transcribe_task.done():
+        transcribe_task.cancel()
+        try:
+            await transcribe_task
+        except asyncio.CancelledError:
+            pass
+
+    # 2) reset queue (drops any buffered audio)
+    audio_queue = asyncio.Queue()
+
+    # 3) inform the client
+    await sio.emit("stopped", {"message": "Transcription stopped"}, to=sid)
+
+app = socketio.ASGIApp(sio, app)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=5000)
