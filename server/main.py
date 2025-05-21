@@ -38,9 +38,8 @@ async def handle_audio(sid, data):
 
 
 SAMPLE_RATE       = 16_000
-MIN_CHUNK_SIZE    = 1               # seconds
+MIN_CHUNK_SIZE    = 3               # seconds
 CHUNK_SIZE        = int(SAMPLE_RATE * MIN_CHUNK_SIZE)
-PROMPT_WORD_COUNT = 10                # how many words to keep as context
 
 model = WhisperModel("tiny.en", device="auto", compute_type="int8")
 
@@ -54,8 +53,6 @@ async def transcribe():
         buffer = np.zeros((0,), dtype=np.float32)
         while buffer.shape[0] < CHUNK_SIZE:
             if audio_queue.empty():
-                if buffer.shape[0] > 0:
-                    break
                 await asyncio.sleep(0.01)
                 continue
                 
@@ -64,17 +61,27 @@ async def transcribe():
             pcm = await audio_queue.get()
             buffer = np.concatenate((buffer, pcm))
         
+        with wave.open("audio.wav", "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(SAMPLE_RATE)
+            wf.writeframes((buffer * 32767).astype(np.int16).tobytes())
+
         # 2) Run Whisper on the entire current buffer
         segments, _ = model.transcribe(
             buffer,
             language="en",
             beam_size=5,
-            condition_on_previous_text=True,
+            vad_filter=True,
+            condition_on_previous_text=False
         )
         # 3) Flatten into a list of word-timestamp objects
         cur = []
         for seg in segments:
             cur.append(seg.text)
+
+        if not cur:
+            continue
 
         await sio.emit("audio_ans", {"text": " ".join(cur)})
         prompt += " ".join(cur) + " "
