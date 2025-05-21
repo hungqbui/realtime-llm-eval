@@ -12,7 +12,6 @@ app = cors(app, allow_origin="*")
 
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
 
-model = WhisperModel("tiny", device="auto", compute_type="int8")
 
 audio_queue = asyncio.Queue()
 overall_buffer = asyncio.Queue()
@@ -30,55 +29,53 @@ def disconnect(sid):
 @sio.on("audio")
 async def handle_audio(sid, data):
     try:
-        pcm = (np.frombuffer(data["audio_data"], dtype=np.float32) * 32767).astype(np.int16)
+        pcm = (np.frombuffer(data["audio_data"], dtype=np.float32) * 32768).astype(np.int16)
         await audio_queue.put(pcm)
+        await overall_buffer.put(pcm)
     except Exception as e:
         print(f"Error processing audio: {e}")
         await sio.emit("error", {"message": "Error processing audio"})
 
 
 SAMPLE_RATE       = 16_000
-MIN_CHUNK_SIZE    = 1                # seconds
+MIN_CHUNK_SIZE    = 2               # seconds
 CHUNK_SIZE        = int(SAMPLE_RATE * MIN_CHUNK_SIZE)
 USE_VAD           = True              # disable VAD for fluent speech
 PROMPT_WORD_COUNT = 200                # how many words to keep as context
 
 
 async def transcribe():
-
-    buffer = np.zeros((0,), dtype=np.int16)
-
     while True:
-        if audio_queue.empty():
-            await asyncio.sleep(0.01)
-            continue
+        model = WhisperModel("tiny.en", device="auto", compute_type="int8")
 
-        if buffer.shape[0] < CHUNK_SIZE:
+        buffer = np.zeros((0,), dtype=np.int16)
+        while buffer.shape[0] < CHUNK_SIZE:
+            if audio_queue.empty():
+                await asyncio.sleep(0.01)
+                continue
             # 1) Get audio from the queue
             pcm = await audio_queue.get()
             buffer = np.concatenate((buffer, pcm))
-            continue
-
+        
         # 2) Run Whisper on the entire current buffer
+        print("Transcribing...")
         segments, _ = model.transcribe(
-            pcm,
+            buffer,
             language="en",
             beam_size=5,
-            word_timestamps=True,
-            condition_on_previous_text=True,
-            vad_filter=USE_VAD,
         )
         # 3) Flatten into a list of word-timestamp objects
         for seg in segments:
             print(seg.text)
+        print("Transcription complete")
 
-        buffer = np.zeros((0,), dtype=np.float32)
         await asyncio.sleep(0.01)
+        # await save_audio()
 
 async def save_audio():
     local = []
-    for pcm in overall_buffer._queue:
-        local.append(pcm)
+    async for pcm in overall_buffer._queue:
+        await local.append(pcm)
 
     with wave.open("audio.wav", "wb") as wf:
         wf.setnchannels(1)
