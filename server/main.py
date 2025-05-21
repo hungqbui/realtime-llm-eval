@@ -54,8 +54,12 @@ async def transcribe():
         buffer = np.zeros((0,), dtype=np.float32)
         while buffer.shape[0] < CHUNK_SIZE:
             if audio_queue.empty():
+                if buffer.shape[0] > 0:
+                    break
                 await asyncio.sleep(0.01)
                 continue
+                
+
             # 1) Get audio from the queue
             pcm = await audio_queue.get()
             buffer = np.concatenate((buffer, pcm))
