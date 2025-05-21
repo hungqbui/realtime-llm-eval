@@ -65,12 +65,12 @@ function App() {
     
     processor.current.onaudioprocess = async (e) => {
       const data = e.inputBuffer.getChannelData(0);
-      console.log(Math.max(...data), Math.min(...data));
       drawFloat32Wave(canvas.current as HTMLCanvasElement, data);
       const int16 = convertFloat32ToInt16(data);
       pcmChunks.current.push(int16);
       
       sendChunkToServer(data);
+      console.log(data.slice(-5))
     };
     input.current?.connect(processor.current);
     processor.current?.connect(audioCtx.current.destination);
