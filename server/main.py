@@ -90,7 +90,7 @@ async def transcribe():
             # 5) Emit any newly stable words
             if stable_len > last_emitted_cnt:
                 new_segment = " ".join(w.word for w in words[last_emitted_cnt:stable_len])
-                await sio.emit("transcript", {"text": new_segment})
+                await sio.emit("audio_ans", {"text": new_segment})
                 # update counters & prompt context
                 last_emitted_cnt = stable_len
                 confirmed_words  = [w.word for w in words[:stable_len]]

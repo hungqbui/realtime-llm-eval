@@ -23,7 +23,7 @@ function App() {
     });
 
     socket.on("audio_ans", (data : any) => {
-      setAnswer(data["res"]);
+      setAnswer(prev => prev + data["text"]);
     })
 
     return () => {
