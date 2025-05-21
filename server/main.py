@@ -29,7 +29,7 @@ def disconnect(sid):
 @sio.on("audio")
 async def handle_audio(sid, data):
     try:
-        pcm = (np.frombuffer(data["audio_data"], dtype=np.float32) * 32768).astype(np.int16)
+        pcm = np.frombuffer(data["audio_data"], dtype=np.float32)
         await audio_queue.put(pcm)
         await overall_buffer.put(pcm)
     except Exception as e:
@@ -48,7 +48,7 @@ async def transcribe():
     while True:
         model = WhisperModel("tiny.en", device="auto", compute_type="int8")
 
-        buffer = np.zeros((0,), dtype=np.int16)
+        buffer = np.zeros((0,), dtype=np.float32)
         while buffer.shape[0] < CHUNK_SIZE:
             if audio_queue.empty():
                 await asyncio.sleep(0.01)
@@ -58,7 +58,6 @@ async def transcribe():
             buffer = np.concatenate((buffer, pcm))
         
         # 2) Run Whisper on the entire current buffer
-        print("Transcribing...")
         segments, _ = model.transcribe(
             buffer,
             language="en",
@@ -67,7 +66,6 @@ async def transcribe():
         # 3) Flatten into a list of word-timestamp objects
         for seg in segments:
             print(seg.text)
-        print("Transcription complete")
 
         await asyncio.sleep(0.01)
         # await save_audio()
