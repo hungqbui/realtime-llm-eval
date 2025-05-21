@@ -38,73 +38,41 @@ async def handle_audio(sid, data):
 
 
 SAMPLE_RATE       = 16_000
-MIN_CHUNK_SIZE    = 2                # seconds
+MIN_CHUNK_SIZE    = 1                # seconds
 CHUNK_SIZE        = int(SAMPLE_RATE * MIN_CHUNK_SIZE)
 USE_VAD           = True              # disable VAD for fluent speech
 PROMPT_WORD_COUNT = 200                # how many words to keep as context
 
 
 async def transcribe():
-    buffer           = np.zeros((0,), dtype=np.int16)
-    prev_words       = None
-    last_emitted_cnt = 0
-    prompt           = ""
+
+    buffer = np.zeros((0,), dtype=np.float32)
 
     while True:
-        while buffer.shape[0] < CHUNK_SIZE or audio_queue.empty():
-            if audio_queue.empty():
-                await asyncio.sleep(0.01)
-                continue
+        if audio_queue.empty():
+            await asyncio.sleep(0.01)
+            continue
 
-            pcm    = await audio_queue.get()
+        if buffer.shape[0] < CHUNK_SIZE:
+            # 1) Get audio from the queue
+            pcm = await audio_queue.get()
             buffer = np.concatenate((buffer, pcm))
+            continue
 
         # 2) Run Whisper on the entire current buffer
         segments, _ = model.transcribe(
-            buffer,
+            pcm,
             language="en",
-            initial_prompt=prompt,
             beam_size=5,
             word_timestamps=True,
             condition_on_previous_text=True,
             vad_filter=USE_VAD,
         )
         # 3) Flatten into a list of word-timestamp objects
-        words = []
         for seg in segments:
-            for w in seg.words:
-                words.append(w)
-                print(w.word)   # w.word, w.start, w.end
+            print(seg.text)
 
-
-        # 4) LocalAgreement-2: compare this run vs the previous run
-        if prev_words is not None:
-            # find longest common prefix (by words)
-            stable_len = 0
-            for pw, cw in zip(prev_words, words):
-                if pw.word == cw.word:
-                    stable_len += 1
-                else:
-                    break
-
-            # 5) Emit any newly stable words
-            if stable_len > last_emitted_cnt:
-                new_segment = " ".join(w.word for w in words[last_emitted_cnt:stable_len])
-                await sio.emit("audio_ans", {"text": new_segment})
-                # update counters & prompt context
-                last_emitted_cnt = stable_len
-                confirmed_words  = [w.word for w in words[:stable_len]]
-                prompt = " ".join(confirmed_words[-PROMPT_WORD_COUNT:])
-
-                print(prompt)
-
-                # 6) Trim the audio buffer up to the last confirmed timestamp
-                last_ts       = words[stable_len-1].end
-                trim_samples  = int(last_ts * SAMPLE_RATE)
-                buffer        = buffer[trim_samples:]
-
-        # 7) Prep for next iteration
-        prev_words = words
+        buffer = np.zeros((0,), dtype=np.float32)
         await asyncio.sleep(0.01)
 
 async def save_audio():
