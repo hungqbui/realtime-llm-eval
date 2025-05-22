@@ -60,12 +60,6 @@ async def transcribe():
             # 1) Get audio from the queue
             pcm = await audio_queue.get()
             buffer = np.concatenate((buffer, pcm))
-        
-        with wave.open("audio.wav", "wb") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(SAMPLE_RATE)
-            wf.writeframes((buffer * 32767).astype(np.int16).tobytes())
 
         # 2) Run Whisper on the entire current buffer
         segments, _ = model.transcribe(
