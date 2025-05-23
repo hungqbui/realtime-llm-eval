@@ -12,6 +12,7 @@ function App() {
   const stream = useRef<MediaStream | null>(null);
   const [answer, setAnswer] = useState<string>("");
   const canvas = useRef<HTMLCanvasElement | null>(null);
+  const timeRef = useRef<number>(0);
 
   useEffect(() => {
     socket.on("connect", () => {
@@ -24,6 +25,7 @@ function App() {
 
     socket.on("audio_ans", (data : any) => {
       setAnswer(prev => prev + data["text"]);
+      console.log(`Time taken to update client: ${performance.now() - timeRef.current}`);
     })
 
     return () => {
@@ -68,8 +70,8 @@ function App() {
       const int16 = convertFloat32ToInt16(data);
       pcmChunks.current.push(int16);
       
+      timeRef.current = performance.now(); 
       sendChunkToServer(data);
-      console.log(data.slice(-5))
     };
     input.current?.connect(processor.current);
     processor.current?.connect(audioCtx.current.destination);

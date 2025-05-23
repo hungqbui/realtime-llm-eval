@@ -6,7 +6,8 @@ from faster_whisper import WhisperModel
 import wave
 import asyncio
 import uvicorn
-from models.diarization import DiartDiarization
+# from models.diarization import DiartDiarization
+import time
 
 app = Quart(__name__)
 app = cors(app, allow_origin="*")
@@ -33,18 +34,18 @@ def disconnect(sid):
 
 @sio.on("audio")
 async def handle_audio(sid, data):
-    global audio_queue
+    global transcribe_queue
 
     try:
         pcm = np.frombuffer(data["audio_data"], dtype=np.float32)
-        await audio_queue.put(pcm)
+        await transcribe_queue.put(pcm)
     except Exception as e:
         print(f"Error processing audio: {e}")
         await sio.emit("error", {"message": "Error processing audio"})
 
 
 model = WhisperModel("tiny.en", device="auto", compute_type="int8")
-diarizer = DiartDiarization()
+# diarizer = DiartDiarization()
 
 prompt = ""
 
@@ -73,6 +74,7 @@ async def transcribe():
 
             buffer = np.concatenate((buffer, pcm))
 
+        before = time.perf_counter()
         segments, _ = model.transcribe(
             buffer,
             language="en",
@@ -91,6 +93,10 @@ async def transcribe():
         prompt += " ".join(cur) + " "
         print(prompt)
         transcribe_queue.task_done()
+        after= time.perf_counter()
+        print(f"Transcription time: {after - before}")
+        with open("log.csv", "a") as f:
+            f.write(f"{after - before},{' '.join(cur)}\n")
 
 @sio.on("start")
 async def start_up(sid):
@@ -102,7 +108,7 @@ async def start_up(sid):
     transcribe_queue = asyncio.Queue()
 
     transcribe_task = asyncio.create_task(transcribe())
-    diarize_task = asyncio.create_task(diarize())
+    # diarize_task = asyncio.create_task(diarize())
 
 @sio.on("stop")
 async def handle_stop(sid):
