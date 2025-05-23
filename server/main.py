@@ -6,16 +6,22 @@ from faster_whisper import WhisperModel
 import wave
 import asyncio
 import uvicorn
-from diart import SpeakerDiarization
+from models.diarization import DiartDiarization
 
 app = Quart(__name__)
 app = cors(app, allow_origin="*")
 
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
 
-audio_queue = asyncio.Queue()
-pipeline = SpeakerDiarization()
-transcribe_task = None
+SAMPLE_RATE       = 16_000
+MIN_CHUNK_SIZE    = 3               # seconds
+CHUNK_SIZE        = int(SAMPLE_RATE * MIN_CHUNK_SIZE)
+
+transcribe_queue = asyncio.Queue()
+diarize_queue = asyncio.Queue()
+
+transcribe_task = diarize_task = None
+diarizer = None
 
 @sio.event
 def connect(sid, environ):
@@ -37,31 +43,36 @@ async def handle_audio(sid, data):
         await sio.emit("error", {"message": "Error processing audio"})
 
 
-SAMPLE_RATE       = 16_000
-MIN_CHUNK_SIZE    = 3               # seconds
-CHUNK_SIZE        = int(SAMPLE_RATE * MIN_CHUNK_SIZE)
-
 model = WhisperModel("tiny.en", device="auto", compute_type="int8")
+diarizer = DiartDiarization()
 
 prompt = ""
 
-async def transcribe(sid):
-    global prompt
-
+async def diarize():
     while True:
+        pcm = await diarize_queue.get()
+        if pcm is None:
+            diarize_queue.task_done()
 
+            break
+
+        print(diarizer.diarize(pcm))
+        diarize_queue.task_done()
+
+async def transcribe():
+    global prompt
+    done = False
+    while not done:
         buffer = np.zeros((0,), dtype=np.float32)
         while buffer.shape[0] < CHUNK_SIZE:
-            if audio_queue.empty():
-                await asyncio.sleep(0.01)
-                continue
+            pcm = await transcribe_queue.get()
+            if pcm is None:
+                done = True
+                
+                break
 
-            pcm = await audio_queue.get()
             buffer = np.concatenate((buffer, pcm))
 
-        annots = pipeline({'uri': sid, 'audio': buffer, 'sample_rate': SAMPLE_RATE})
-        rttm = annots[0].to_rttm()
-        print(rttm)
         segments, _ = model.transcribe(
             buffer,
             language="en",
@@ -79,18 +90,23 @@ async def transcribe(sid):
         await sio.emit("audio_ans", {"text": " ".join(cur)})
         prompt += " ".join(cur) + " "
         print(prompt)
-        await asyncio.sleep(0.01)
+        transcribe_queue.task_done()
 
 @sio.on("start")
 async def start_up(sid):
-    global transcribe_task, audio_queue
+    global transcribe_task, diarize_task, transcribe_queue, diarize_queue
 
-    audio_queue = asyncio.Queue()
-    transcribe_task = asyncio.create_task(transcribe(sid))
+    print("Starting up")
+
+    diarize_queue = asyncio.Queue()
+    transcribe_queue = asyncio.Queue()
+
+    transcribe_task = asyncio.create_task(transcribe())
+    diarize_task = asyncio.create_task(diarize())
 
 @sio.on("stop")
 async def handle_stop(sid):
-    global transcribe_task, audio_queue
+    global transcribe_task
     # 1) cancel the running transcription Task
     if transcribe_task and not transcribe_task.done():
         transcribe_task.cancel()
@@ -99,7 +115,12 @@ async def handle_stop(sid):
         except asyncio.CancelledError:
             pass
 
-    audio_queue = asyncio.Queue()
+    if diarize_task and not diarize_task.done():
+        diarize_task.cancel()
+        try:
+            await diarize_task
+        except asyncio.CancelledError:
+            pass
 
     # 3) inform the client
     await sio.emit("stopped", {"message": "Transcription stopped"}, to=sid)
