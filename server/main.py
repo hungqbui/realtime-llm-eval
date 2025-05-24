@@ -8,6 +8,7 @@ import asyncio
 import uvicorn
 # from models.diarization import DiartDiarization
 import time
+import sys
 
 app = Quart(__name__)
 app = cors(app, allow_origin="*")
@@ -43,8 +44,10 @@ async def handle_audio(sid, data):
         print(f"Error processing audio: {e}")
         await sio.emit("error", {"message": "Error processing audio"})
 
+useCuda = input("Use CUDA? (y/n): ").strip().lower() == "y"
+model_str = input("Model name (e.g., tiny.en): ").strip()
 
-model = WhisperModel("tiny.en", device="auto", compute_type="int8")
+model = WhisperModel(model_str, device="auto" if not useCuda else "cuda", compute_type="int8" if not useCuda else "float16")
 # diarizer = DiartDiarization()
 
 prompt = ""
@@ -95,7 +98,7 @@ async def transcribe():
         transcribe_queue.task_done()
         after= time.perf_counter()
         print(f"Transcription time: {after - before}")
-        with open("log.csv", "a") as f:
+        with open(f"log_{model_str}.csv", "a") as f:
             f.write(f"{after - before},{' '.join(cur)}\n")
 
 @sio.on("start")
