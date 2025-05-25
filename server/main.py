@@ -169,7 +169,7 @@ async def handle_stop(sid):
 
 @sio.on("chat_message")
 async def handle_chat_message(sid, data):
-    print(f"Received chat message from {sid}: {data['message']}")
+    print(f"Received chat message from {sid}: {data}")
 
     ans = llm_answer(data['message'], context=data.get('transcript', None), history=data.get('history', None))
 
