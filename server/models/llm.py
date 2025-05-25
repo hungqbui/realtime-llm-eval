@@ -5,16 +5,31 @@ llm = Llama.from_pretrained(
     filename="*q4_k_m.gguf"
 )
 
-out = llm.create_chat_completion(
-    messages=[
-        {
-            "role": "system",
-            "content": "You are a helpful assistant that outputs in JSON.",
+def llm_answer(question, history=None, context=None):
+
+    prompt = "".join([f"{i.type}: {i.content}\n" for i in history]) if history else ""
+
+    prompt += f"User: {question}\nAI:"
+
+    
+
+    out = llm.create_chat_completion(
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a helpful assistant that answers questions of a conversation base on the context of the transcription.",
+            },
+            {
+                "role": "user",
+                "content": f"This is the conversation: {context}" if context else "No context provided.",
+            },
+            {"role": "user", "content": prompt},
+        ],
+        response_format={
+            "type": "json_object",
         },
-        {"role": "user", "content": "Who won the world series in 2020"},
-    ],
-    response_format={
-        "type": "json_object",
-    },
-)
-print(out)
+    )
+
+    print("LLM output:", out)
+
+    return out

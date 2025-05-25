@@ -11,6 +11,7 @@ import time
 import sys
 from collections import defaultdict
 import re
+from models.llm import llm_answer
 
 app = Quart(__name__)
 app = cors(app, allow_origin="*")
@@ -170,9 +171,10 @@ async def handle_stop(sid):
 async def handle_chat_message(sid, data):
     print(f"Received chat message from {sid}: {data['message']}")
 
-    print("chat", data)
+    ans = llm_answer(data['message'], context=data.get('transcript', None), history=data.get('history', None))
 
-    await sio.emit("chat_response", {"message": f"Echo: {data['message']}"}, to=sid)
+
+    await sio.emit("chat_response", {"message": f"{ans}"}, to=sid)
 
 app = socketio.ASGIApp(sio, app)
 
