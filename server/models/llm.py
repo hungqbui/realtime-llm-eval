@@ -23,6 +23,10 @@ def llm_answer(question, history=None, context=None):
                 "role": "user",
                 "content": f"This is the conversation: {context}" if context else "No context provided.",
             },
+            {
+                "role": "system",
+                "content": "Thank you for the context. I am now aware of the details of the conversation and ready to answer any questions.",
+            },
             {"role": "user", "content": prompt},
         ],
         response_format={
