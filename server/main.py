@@ -113,7 +113,7 @@ async def transcribe(sid):
 
                 print(f"Word: {word.word}, Start: {adjusted_start}, End: {adjusted_end}")
 
-                if adjusted_start <= last_word:
+                if adjusted_start < last_word:
                     continue
 
                 cur.append(re.sub(r'[^A-Za-z]+', '', word.word))
@@ -122,7 +122,7 @@ async def transcribe(sid):
         buffer.popleft()
         buffer.popleft()
 
-        window_num += 0.512 + 0.01
+        window_num += 0.511
         if not cur:
             transcribe_queue[sid].task_done()
             continue
