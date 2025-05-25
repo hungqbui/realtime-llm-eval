@@ -4,5 +4,6 @@ __pycache__/
 node_modules/
 .vscode/
 audio_uploads/
+videos/
 **/*/temp.*
 **/*/log*.*

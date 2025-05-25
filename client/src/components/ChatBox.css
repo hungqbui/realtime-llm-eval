@@ -1,0 +1,17 @@
+.chat-container {
+  height: 400px;            /* fixed height */
+  width: 70%;
+  overflow-y: auto;         /* enable vertical scroll */
+  padding: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background: #fafafa;
+  display: flex;
+  flex-direction: column;
+  color: black;
+  align-items: start;
+
+  word-wrap: "break-word";
+  overflow-wrap: break-word;    /* modern name */
+  word-break: break-word; 
+}

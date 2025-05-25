@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { socket } from './utils/socket'; 
 import './App.css'
+import ChatBox from './components/ChatBox';
 
 function App() {
 
@@ -8,11 +9,15 @@ function App() {
   const [isRecording, setIsRecording] = useState(false);
   const processor = useRef<ScriptProcessorNode | null>(null);
   const input = useRef<MediaStreamAudioSourceNode | null>(null);
-  const pcmChunks = useRef<Int16Array[]>([]);
   const stream = useRef<MediaStream | null>(null);
+  const vidRecorder = useRef<MediaRecorder | null>(null);
   const [answer, setAnswer] = useState<string>("");
-  const canvas = useRef<HTMLCanvasElement | null>(null);
+  const vidRef = useRef<HTMLVideoElement | null>(null);
   const timeRef = useRef<number>(0);
+  const [title, setTitle] = useState<string>("");
+  const [titleSet, setTitleSet] = useState<boolean>(false);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [message, setMessage] = useState<string>("");
 
   useEffect(() => {
     socket.on("connect", () => {
@@ -24,51 +29,50 @@ function App() {
     });
 
     socket.on("audio_ans", (data : any) => {
-      setAnswer(prev => prev + data["text"]);
+      setAnswer(prev => prev + " " + data["text"]);
       console.log(`Time taken to update client: ${performance.now() - timeRef.current}`);
+    })
+
+    socket.on("chat_response", (data : any) => {
+      setMessages(prev => [...prev, {type: "AI", content: data["message"]}]);
     })
 
     return () => {
       socket.off("connect");
       socket.off("disconnect");
       socket.off("audio_ans");
+      socket.off("chat_response");
     }
 
   }, []);
-  function drawFloat32Wave(canvas : HTMLCanvasElement, floatArray: Float32Array) {
-    const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
-    const width = canvas.width;
-    const height = canvas.height;
-
-    ctx.clearRect(0, 0, width, height);
-    ctx.beginPath();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'lime';
-
-    const step = width / floatArray.length;
-    for (let i = 0; i < floatArray.length; i++) {
-      const x = i * step;
-      const y = height / 2 - (floatArray[i] * height / 2);
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    }
-
-    ctx.stroke();
-  }
 
   const startRecording = async () => {
-    stream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.current = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
 
     audioCtx.current = new AudioContext({ sampleRate: 16000 });
     audioCtx.current.resume();
+
+    vidRecorder.current = new MediaRecorder(stream.current, {
+      mimeType: 'video/webm',
+    });
+
+    vidRef.current!.srcObject = stream.current;
+
+    vidRecorder.current.ondataavailable = async (event) => {
+      if (event.data && event.data.size > 0) {
+        const buf = await event.data.arrayBuffer();
+        socket.emit("video", {
+          "video_data": buf,
+        });
+      }
+    }
+    vidRecorder.current.start(1000)
 
     input.current = audioCtx.current.createMediaStreamSource(stream.current);
     processor.current = audioCtx.current.createScriptProcessor(4096, 1, 1);
     
     processor.current.onaudioprocess = async (e) => {
       const data = e.inputBuffer.getChannelData(0);
-      drawFloat32Wave(canvas.current as HTMLCanvasElement, data);
-      const int16 = convertFloat32ToInt16(data);
-      pcmChunks.current.push(int16);
       
       timeRef.current = performance.now(); 
       sendChunkToServer(data);
@@ -77,15 +81,6 @@ function App() {
     processor.current?.connect(audioCtx.current.destination);
     setIsRecording(true);
     socket.emit("start")
-  }
-
-  function convertFloat32ToInt16(buffer : Float32Array) {
-    let l = buffer.length;
-    let result = new Int16Array(l);
-    for (let i = 0; i < l; i++) {
-      result[i] = Math.round(buffer[i] * 0x7FFF);
-    }
-    return result;
   }
 
   const stopRecording = () => {
@@ -101,33 +96,69 @@ function App() {
 
   function sendChunkToServer(int16Chunk : any) {
     const blob = new Blob([int16Chunk], { type: 'application/octet-stream' });
-
-    // const response = await fetch("/api/transcribe", {
-    //   method: "POST",
-    //   headers: {
-    //     "Content-Type": "application/octet-stream",
-    //   },
-    //   body: blob,
-    // })
-
     socket.emit("audio", {
       "audio_data": blob,
-      "session_id": "1234",
     });
-
   }
 
-  return (
-    <>
-      <button onClick={async () => {
-        if (!isRecording) startRecording();
-        else stopRecording();
-      }}>
-        { isRecording ? "Stop" : "Start" }
-      </button>
-      <p>Answer: {answer}</p>
-      <canvas ref={canvas} width={800} height={400} style={{ border: "1px solid black" }} />
-    </>
+  function textMessageHandler(event: any) {
+    if (message.trim() === "") {
+      return
+    }
+
+    setMessages([...messages, {type: "User", content: message}]);
+    socket.emit("chat_message", { message, title, transcription: answer, history: messages.slice(-10) });
+    setMessage("");
+  }
+
+  if (titleSet)
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", width: "100vw" }}>
+        <div style={{ marginBottom: "16px" }}>
+          <button onClick={async () => {
+            if (!isRecording) startRecording();
+            else stopRecording();
+          }} style={{ backgroundColor: isRecording ? "red" : "green" }}>
+            { isRecording ? "Stop" : "Start" }
+          </button>
+        </div>
+        <video style={{ border: "1px solid black", }}
+          ref={vidRef}
+          muted
+          autoPlay
+          playsInline
+          width="640"
+          height="480"
+        ></video>
+        <div style={{ marginTop: "16px", width: "50%", textAlign: "center", display: "flex", flexDirection: "row", justifyContent: "space-evenly" }}>
+
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "70%" }}>
+            <p>Chatbox</p>
+            <ChatBox messages={messages} />
+            <div style={{ marginTop: "16px", width: "100%" }}>
+              <input onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  textMessageHandler(e);
+                }
+              }} style={{ height: "100%", width: "50%", marginRight: "8px" }} type="text" value={message} onChange={(e) => setMessage(e.target.value)} />
+              <button onClick={textMessageHandler}>Send</button>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "30%", height: "100%", margin: 0 }}>
+            <p>Transcription</p>
+            <textarea style={{ width: "100%", height: "400px" }} value={answer} readOnly />
+          </div>
+
+        </div>
+
+      </div>
+    )
+  else return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", width: "100vw" }}>
+      <input style={{ marginBottom: "16px", padding: "8px", fontSize: "16px", width: "80%" }} type="text" value={title} onChange={(e) => setTitle(e.target.value)} />
+      <button onClick={() => setTitleSet(true)}>Set Title</button>
+    </div>
   )
 }
 

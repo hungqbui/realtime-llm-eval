@@ -9,6 +9,8 @@ import uvicorn
 # from models.diarization import DiartDiarization
 import time
 import sys
+from collections import defaultdict
+import re
 
 app = Quart(__name__)
 app = cors(app, allow_origin="*")
@@ -19,11 +21,11 @@ SAMPLE_RATE       = 16_000
 MIN_CHUNK_SIZE    = 3               # seconds
 CHUNK_SIZE        = int(SAMPLE_RATE * MIN_CHUNK_SIZE)
 
-transcribe_queue = asyncio.Queue()
-diarize_queue = asyncio.Queue()
+transcribe_queue = defaultdict(asyncio.Queue)
+user_tasks = defaultdict(asyncio.Task)
 
-transcribe_task = diarize_task = None
-diarizer = None
+# diarize_queue = defaultdict(asyncio.Queue)
+# diarizer = None
 
 @sio.event
 def connect(sid, environ):
@@ -39,7 +41,7 @@ async def handle_audio(sid, data):
 
     try:
         pcm = np.frombuffer(data["audio_data"], dtype=np.float32)
-        await transcribe_queue.put(pcm)
+        await transcribe_queue[sid].put(pcm)
     except Exception as e:
         print(f"Error processing audio: {e}")
         await sio.emit("error", {"message": "Error processing audio"})
@@ -50,89 +52,126 @@ model_str = input("Model name (e.g., tiny.en): ").strip()
 model = WhisperModel(model_str, device="auto" if not useCuda else "cuda", compute_type="int8" if not useCuda else "float16")
 # diarizer = DiartDiarization()
 
-prompt = ""
+@sio.on("video")
+async def handle_video(sid, data):
+    with open(f"videos/video_{sid}.webm", 'ab') as f:
+        f.write(data["video_data"])
 
-async def diarize():
-    while True:
-        pcm = await diarize_queue.get()
+
+# async def diarize():
+#     while True:
+#         pcm = await diarize_queue.get()
+#         if pcm is None:
+#             diarize_queue.task_done()
+
+#             break
+
+#         diarize_queue.task_done()
+
+async def model_run(buffer, prompt=None):
+    segments, info = model.transcribe(
+        np.concatenate(buffer).astype(np.float32),
+        language="en",
+        beam_size=5,
+        vad_filter=True,
+        initial_prompt=prompt,
+        condition_on_previous_text=False,
+        word_timestamps=True,
+    )
+    return segments, info
+
+async def transcribe(sid):
+    from collections import deque
+    done = False
+    last_word = 0
+    window_num = 0
+
+    prompt = ""
+
+    buffer = deque(maxlen=CHUNK_SIZE) 
+    while not done:
+        pcm = await transcribe_queue[sid].get()
+        buffer.append(pcm)
+
         if pcm is None:
-            diarize_queue.task_done()
-
+            done = True
             break
 
-        print(diarizer.diarize(pcm))
-        diarize_queue.task_done()
+        if len(buffer) * 4096 <= CHUNK_SIZE and not done:
+            transcribe_queue[sid].task_done()
+            continue
 
-async def transcribe():
-    global prompt
-    done = False
-    while not done:
-        buffer = np.zeros((0,), dtype=np.float32)
-        while buffer.shape[0] < CHUNK_SIZE:
-            pcm = await transcribe_queue.get()
-            if pcm is None:
-                done = True
-                
-                break
-
-            buffer = np.concatenate((buffer, pcm))
 
         before = time.perf_counter()
-        segments, _ = model.transcribe(
-            buffer,
-            language="en",
-            beam_size=5,
-            vad_filter=True,
-            condition_on_previous_text=False
-        )
-        cur = []
-        for seg in segments:
-            cur.append(seg.text)
 
+        segments, _ = await model_run(buffer)
+        cur = []
+        next_last = last_word
+        for seg in segments:
+            for word in seg.words:
+                adjusted_start = word.start + window_num
+                adjusted_end = word.end + window_num
+
+                print(f"Word: {word.word}, Start: {adjusted_start}, End: {adjusted_end}")
+
+                if adjusted_start < last_word:
+                    continue
+
+                cur.append(re.sub(r'[^A-Za-z]+', '', word.word))
+                next_last = adjusted_end
+
+        last_word = next_last
+
+        buffer.popleft()
+        buffer.popleft()
+        buffer.popleft()
+
+        window_num += 0.768
         if not cur:
             continue
 
-        await sio.emit("audio_ans", {"text": " ".join(cur)})
-        prompt += " ".join(cur) + " "
-        print(prompt)
-        transcribe_queue.task_done()
+        await sio.emit("audio_ans", {"text": " ".join(cur)}, to=sid)
+
+        transcribe_queue[sid].task_done()
         after= time.perf_counter()
-        print(f"Transcription time: {after - before}")
+
+        # Logging
+        print(f"Transcription time: {after - before}, {sid}")
         with open(f"log_{model_str}.csv", "a") as f:
             f.write(f"{after - before},{' '.join(cur)}\n")
 
 @sio.on("start")
 async def start_up(sid):
-    global transcribe_task, diarize_task, transcribe_queue, diarize_queue
+    global transcribe_queue
 
     print("Starting up")
 
-    diarize_queue = asyncio.Queue()
-    transcribe_queue = asyncio.Queue()
+    transcribe_queue[sid] = asyncio.Queue()
 
-    transcribe_task = asyncio.create_task(transcribe())
-    # diarize_task = asyncio.create_task(diarize())
+    user_tasks[sid] = sio.start_background_task(transcribe, sid)
 
 @sio.on("stop")
 async def handle_stop(sid):
-    global transcribe_task
-    # 1) cancel the running transcription Task
-    if transcribe_task and not transcribe_task.done():
-        transcribe_task.cancel()
-        try:
-            await transcribe_task
-        except asyncio.CancelledError:
-            pass
+    global transcribe_queue, user_tasks
 
-    if diarize_task and not diarize_task.done():
-        diarize_task.cancel()
-        try:
-            await diarize_task
-        except asyncio.CancelledError:
-            pass
+    if user_tasks.get(sid):
+        if user_tasks[sid] and not user_tasks[sid].done():
+            user_tasks[sid].cancel()
+            await user_tasks[sid]
+
+        del transcribe_queue[sid]
+        del user_tasks[sid]
 
     # 3) inform the client
     await sio.emit("stopped", {"message": "Transcription stopped"}, to=sid)
+
+@sio.on("chat_message")
+async def handle_chat_message(sid, data):
+    print(f"Received chat message from {sid}: {data['message']}")
+
+    print("chat", data)
+
+    await sio.emit("chat_response", {"message": f"Echo: {data['message']}"}, to=sid)
 
 app = socketio.ASGIApp(sio, app)
 

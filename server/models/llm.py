@@ -5,6 +5,16 @@ llm = Llama.from_pretrained(
     filename="*q4_k_m.gguf"
 )
 
-out = llm("What is the capital of France?", max_tokens=10, stop=["Q:", "\n"], echo=True)
-
+out = llm.create_chat_completion(
+    messages=[
+        {
+            "role": "system",
+            "content": "You are a helpful assistant that outputs in JSON.",
+        },
+        {"role": "user", "content": "Who won the world series in 2020"},
+    ],
+    response_format={
+        "type": "json_object",
+    },
+)
 print(out)
