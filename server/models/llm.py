@@ -4,6 +4,7 @@ llm = Llama.from_pretrained(
     repo_id="hungqbui/medgemma-4b-it-Q4_K_M-GGUF",
     filename="*q4_k_m.gguf",
     verbose=False,
+    n_ctx=131072,
 )
 
 def llm_answer(question, history=None, context=None):
@@ -12,7 +13,7 @@ def llm_answer(question, history=None, context=None):
 
     prompt += f"User: {question}\nAI:"
 
-    
+    print(context)
 
     out = llm.create_chat_completion(
         messages=[
