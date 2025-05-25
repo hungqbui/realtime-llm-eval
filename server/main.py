@@ -74,8 +74,7 @@ async def model_run(buffer, prompt=None):
         language="en",
         beam_size=5,
         vad_filter=True,
-        initial_prompt=prompt,
-        condition_on_previous_text=False,
+        condition_on_previous_text=True,
         word_timestamps=True,
     )
     return segments, info
@@ -86,7 +85,7 @@ async def transcribe(sid):
     last_word = 0
     window_num = 0
 
-    prompt = ""
+    prompt = []
 
     buffer = deque(maxlen=CHUNK_SIZE) 
     while not done:
@@ -104,9 +103,9 @@ async def transcribe(sid):
 
         before = time.perf_counter()
 
-        segments, _ = await model_run(buffer)
+        segments, _ = await model_run(buffer, prompt=" ".join(prompt))
         cur = []
-        next_last = last_word
+
         for seg in segments:
             for word in seg.words:
                 adjusted_start = word.start + window_num
@@ -114,21 +113,22 @@ async def transcribe(sid):
 
                 print(f"Word: {word.word}, Start: {adjusted_start}, End: {adjusted_end}")
 
-                if adjusted_start < last_word:
+                if adjusted_start <= last_word:
                     continue
 
                 cur.append(re.sub(r'[^A-Za-z]+', '', word.word))
-                next_last = adjusted_end
-
-        last_word = next_last
-
-        buffer.popleft()
+                last_word = adjusted_end
+        
         buffer.popleft()
         buffer.popleft()
 
-        window_num += 0.768
+        window_num += 0.512
         if not cur:
+            transcribe_queue[sid].task_done()
             continue
+
+        prompt += cur
+        prompt = prompt[-10:]  # Keep the last 10 words as context
 
         await sio.emit("audio_ans", {"text": " ".join(cur)}, to=sid)
 
@@ -142,6 +142,7 @@ async def transcribe(sid):
 
 @sio.on("start")
 async def start_up(sid):
+
     global transcribe_queue
 
     print("Starting up")
