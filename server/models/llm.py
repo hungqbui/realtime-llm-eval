@@ -2,7 +2,8 @@ from llama_cpp import Llama
 
 llm = Llama.from_pretrained(
     repo_id="hungqbui/medgemma-4b-it-Q4_K_M-GGUF",
-    filename="*q4_k_m.gguf"
+    filename="*q4_k_m.gguf",
+    verbose=False,
 )
 
 def llm_answer(question, history=None, context=None):
@@ -29,9 +30,6 @@ def llm_answer(question, history=None, context=None):
             },
             {"role": "user", "content": prompt},
         ],
-        response_format={
-            "type": "json_object",
-        },
     )
 
     print("LLM output:", out)
