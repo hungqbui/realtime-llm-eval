@@ -122,7 +122,7 @@ async def transcribe(sid):
         buffer.popleft()
         buffer.popleft()
 
-        window_num += 0.512
+        window_num += 0.512 + 0.01
         if not cur:
             transcribe_queue[sid].task_done()
             continue
