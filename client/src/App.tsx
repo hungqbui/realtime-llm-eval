@@ -46,8 +46,8 @@ function App() {
 
     socket.on("stream_end", (data : any) => {
       setWaitingForResponse(false);
-      console.log(fullTextRef.current)
-      setMessages(prev => [...prev, { type: "AI", content: fullTextRef.current }]);
+      const temp = fullTextRef.current;
+      setMessages(prev => [...prev, { type: "AI", content: temp }]);
 
       setFullText("");
       fullTextRef.current = "";
