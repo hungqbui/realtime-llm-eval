@@ -33,6 +33,6 @@ def llm_answer(question, history=None, context=None):
         ],
     )
 
-    print("LLM output:", out)
+    print("LLM output:", out.keys())
 
     return out.get("choices")[0].get("message").get("content").strip() if out.choices else "No response from LLM."
