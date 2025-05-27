@@ -40,11 +40,15 @@ async def llm_answer(question, socket, sid, history=None, context=None):
         if "delta" not in chunk["choices"][0] or "content" not in chunk["choices"][0]["delta"]:
             continue
         
+        print("Socket emit", flush=True)
         await socket.emit("chat_response", {"message": chunk["choices"][0]["delta"]["content"]}, to=sid)
-        print(chunk["choices"][0]["delta"]["content"], end="", flush=True)
+        print("Emit done", flush=True)
 
 
-    socket.emit("stream_end", {}, to=sid)
+        print(chunk["choices"][0]["delta"]["content"], flush=True)
+
+
+    await socket.emit("stream_end", {}, to=sid)
 
     return  "No response from LLM."
     return out["choices"][0]["message"]["content"].strip() if out["choices"] else "No response from LLM."
