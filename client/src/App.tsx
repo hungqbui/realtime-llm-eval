@@ -23,7 +23,7 @@ function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [emotion, setEmotion] = useState<string>("");
   const [waitingForResponse, setWaitingForResponse] = useState<boolean>(false);
-  const fullTextRef = useRef<string>("");
+  const [fullText, setFullText] = useState<string>("");
 
   useEffect(() => {
 
@@ -41,15 +41,14 @@ function App() {
     })
 
     socket.on("chat_response", (data : any) => {
-      fullTextRef.current += data["message"];
+      setFullText(prev => prev + data["message"]);
     })
 
     socket.on("stream_end", (data : any) => {
       setWaitingForResponse(false);
-      setAnswer(fullTextRef.current);
-      fullTextRef.current = "";
-
-      setMessages(prev => [...prev, { type: "AI", content: fullTextRef.current }]);
+      setAnswer(fullText);
+      setMessages(prev => [...prev, { type: "AI", content: fullText }]);
+      setFullText("");
     })
 
     return () => {
@@ -191,7 +190,7 @@ function App() {
 
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "70%" }}>
             <p>Chatbox</p>
-            <ChatBox messages={messages} />
+            <ChatBox messages={messages} temp={fullText} />
             <div style={{ marginTop: "16px", width: "100%" }}>
               <input onKeyDown={(e) => {
                 if (e.key === "Enter") {
