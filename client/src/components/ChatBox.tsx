@@ -1,5 +1,13 @@
 import { useEffect, useRef } from 'react'
 import "./ChatBox.css"
+import { marked } from 'marked';
+
+marked.setOptions({
+  mangle: false,       // disable automatic email obfuscation
+  headerIds: false,
+  // *** this turns off all HTML parsing ***
+  renderer: new marked.Renderer({ sanitize: true })
+});
 
 function ChatBox(props : any) {
 
@@ -11,9 +19,9 @@ function ChatBox(props : any) {
     return (
         <div className="chat-container">
             {props.messages.map((msg : any, index : any) => (
-              <div style={{ width: "80%" }} key={index}><div style={{ fontWeight: "bold", width: "80%", display: "flex" }}>{msg.type}</div><span style={{ textAlign: "left", display: "flex", justifyContent: "left" }}>{msg.content}</span></div>
+              <div style={{ width: "80%" }} key={index}><div style={{ fontWeight: "bold", width: "80%", display: "flex" }}>{msg.type}</div><span style={{ textAlign: "left", display: "flex", justifyContent: "left" }}>{marked(msg.content)}</span></div>
             ))}
-            { props.temp && <div style={{ width: "80%" }}><div style={{ fontWeight: "bold", width: "80%", display: "flex" }}>AI</div><span style={{ textAlign: "left", display: "flex", justifyContent: "left" }}>{props.temp}</span></div>}
+            { props.temp && <div style={{ width: "80%" }}><div style={{ fontWeight: "bold", width: "80%", display: "flex" }}>AI</div><span style={{ textAlign: "left", display: "flex", justifyContent: "left" }}>{marked(props.temp)}</span></div>}
             <div ref={end}></div>
         </div>
     )
