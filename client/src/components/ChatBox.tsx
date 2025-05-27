@@ -13,13 +13,13 @@ function ChatBox(props : any) {
     return (
         <div className="chat-container">
             {props.messages.map((msg : any, index : any) => (
-              <div style={{ width: "80%" }} key={index}><div style={{ fontWeight: "bold", width: "80%", display: "flex" }}>{msg.type}</div><span style={{ textAlign: "left", display: "flex", justifyContent: "left" }}>
-                <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{msg.content}</ReactMarkdown>
+              <div style={{ width: "80%" }} key={index}><div style={{ fontWeight: "bold", width: "80%", display: "flex" }}>{msg.type}</div><span>
+                    <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{msg.content}</ReactMarkdown>
                 </span></div>
             ))}
-            { props.temp && <div style={{ width: "80%" }}><div style={{ fontWeight: "bold", width: "80%", display: "flex" }}>AI</div><span style={{ textAlign: "left", display: "flex", justifyContent: "left" }}>
-              <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{props.temp}</ReactMarkdown>
-            </span></div>}
+            { props.temp && <div style={{ width: "80%" }}><div style={{ fontWeight: "bold", width: "80%", display: "flex" }}>AI</div><span>
+                <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{props.temp}</ReactMarkdown>
+                </span></div>}
             <div ref={end}></div>
         </div>
     )
