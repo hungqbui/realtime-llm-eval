@@ -186,7 +186,6 @@ async def handle_chat_message(sid, data):
 
     ans = llm_answer(data['message'], context=data.get('transcription', None), history=data.get('history', None))
 
-
     await sio.emit("chat_response", {"message": f"{ans}"}, to=sid)
 
 if __name__ == "__main__":
