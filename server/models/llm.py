@@ -7,7 +7,7 @@ llm = Llama.from_pretrained(
     n_ctx=131072,
 )
 
-def llm_answer(question, history=None, context=None):
+def llm_answer(question,socket, sid, history=None, context=None):
 
     prompt = "".join([f"{i.get('type')}: {i.get('content')}\n" for i in history]) if history else ""
 
@@ -39,8 +39,12 @@ def llm_answer(question, history=None, context=None):
             continue
         if "delta" not in chunk["choices"][0] or "content" not in chunk["choices"][0]["delta"]:
             continue
+        
+        socket.emit("chat_response", {"message": chunk["choices"][0]["delta"]["content"]}, to=sid)
         print(chunk["choices"][0]["delta"]["content"], end="", flush=True)
 
+
+    socket.emit("stream_end", {}, to=sid)
 
     return  "No response from LLM."
     return out["choices"][0]["message"]["content"].strip() if out["choices"] else "No response from LLM."

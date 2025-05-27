@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { socket } from './utils/socket'; 
 import './App.css'
 import ChatBox from './components/ChatBox';
+import { full } from '@huggingface/transformers';
 
 function App() {
 
@@ -21,6 +22,8 @@ function App() {
   const [message, setMessage] = useState<string>("");
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [emotion, setEmotion] = useState<string>("");
+  const [waitingForResponse, setWaitingForResponse] = useState<boolean>(false);
+  const fullTextRef = useRef<string>("");
 
   useEffect(() => {
 
@@ -38,10 +41,16 @@ function App() {
     })
 
     socket.on("chat_response", (data : any) => {
-      setMessages(prev => [...prev, {type: "AI", content: data["message"]}]);
+      fullTextRef.current += data["message"];
     })
 
-    
+    socket.on("stream_end", (data : any) => {
+      setWaitingForResponse(false);
+      setAnswer(fullTextRef.current);
+      fullTextRef.current = "";
+
+      setMessages(prev => [...prev, { type: "AI", content: fullTextRef.current }]);
+    })
 
     return () => {
       socket.off("connect");
@@ -146,6 +155,8 @@ function App() {
   }
 
   function textMessageHandler(event: any) {
+    if (waitingForResponse) return
+
     if (message.trim() === "") {
       return
     }
@@ -187,7 +198,7 @@ function App() {
                   textMessageHandler(e);
                 }
               }} style={{ height: "100%", width: "50%", marginRight: "8px" }} type="text" value={message} onChange={(e) => setMessage(e.target.value)} />
-              <button onClick={textMessageHandler}>Send</button>
+              <button onClick={textMessageHandler} disabled={waitingForResponse}>Send</button>
             </div>
           </div>
 
