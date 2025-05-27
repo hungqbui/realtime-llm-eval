@@ -48,6 +48,7 @@ function App() {
       setWaitingForResponse(false);
       console.log(fullTextRef.current)
       setMessages(prev => [...prev, { type: "AI", content: fullTextRef.current }]);
+
       setFullText("");
       fullTextRef.current = "";
     })
@@ -208,7 +209,9 @@ function App() {
           </div>
 
         </div>
-
+        <button onClick={() => {
+          console.log(messages);
+        }} style={{ marginTop: "16px" }}>debug</button>
       </div>
     )
   else return (
