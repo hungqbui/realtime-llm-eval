@@ -34,8 +34,6 @@ def llm_answer(question, history=None, context=None):
         stream=True
     )
 
-    print("LLM output:", out.keys())
-
     for chunk in out:
         if "choices" not in chunk or not chunk["choices"]:
             continue
