@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
+
+import React, { useState, useEffect, useRef } from 'react'
 import { socket } from './utils/socket'; 
 import './App.css'
 import ChatBox from './components/ChatBox';
@@ -22,6 +23,7 @@ function App() {
   const [emotion, setEmotion] = useState<string>("");
 
   useEffect(() => {
+
     socket.on("connect", () => {
       console.log("Connected to server");
     });
@@ -51,7 +53,6 @@ function App() {
   }, []);
 
   useEffect(() => {
-    
     if (!isRecording) return;
 
     const frameInterval = setInterval(async () => {
@@ -91,14 +92,13 @@ function App() {
   }, [isRecording]);
 
   const startRecording = async () => {
+
     stream.current = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
 
     audioCtx.current = new AudioContext({ sampleRate: 16000 });
     audioCtx.current.resume();
 
-    vidRecorder.current = new MediaRecorder(stream.current, {
-      mimeType: 'video/webm',
-    });
+    vidRecorder.current = new MediaRecorder(stream.current);
 
     vidRef.current!.srcObject = stream.current;
 
