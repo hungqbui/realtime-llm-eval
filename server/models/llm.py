@@ -31,8 +31,18 @@ def llm_answer(question, history=None, context=None):
             },
             {"role": "user", "content": prompt},
         ],
+        stream=True
     )
 
     print("LLM output:", out.keys())
 
+    for chunk in out:
+        if "choices" not in chunk or not chunk["choices"]:
+            continue
+        if "delta" not in chunk["choices"][0] or "content" not in chunk["choices"][0]["delta"]:
+            continue
+        print(chunk["choices"][0]["delta"]["content"], end="", flush=True)
+
+
+    return  "No response from LLM."
     return out["choices"][0]["message"]["content"].strip() if out["choices"] else "No response from LLM."
