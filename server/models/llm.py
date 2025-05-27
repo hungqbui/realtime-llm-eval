@@ -35,7 +35,7 @@ async def llm_answer(question, socket, sid, history=None, context=None):
         stream=True
     )
 
-    async for chunk in out:
+    for chunk in out:
         if "choices" not in chunk or not chunk["choices"]:
             continue
         if "delta" not in chunk["choices"][0] or "content" not in chunk["choices"][0]["delta"]:

@@ -194,7 +194,9 @@ async def handle_stop(sid):
 async def handle_chat_message(sid, data):
     print(f"Received chat message from {sid}: {data}")
 
-    await llm_answer(data['message'],socket=sio, sid=sid, context=data.get('transcription', None), history=data.get('history', None))
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(executor, llm_answer, data['message'], socket=sio, sid=sid, context=data.get('transcription', None), history=data.get('history', None))
+
 
 
 if __name__ == "__main__":
