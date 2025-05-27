@@ -194,7 +194,7 @@ async def handle_chat_message(sid, data):
 
     loop = asyncio.get_event_loop()
 
-    await loop.run_in_executor(executor, llm_answer, (data['message'], sio, sid, data.get('history', None)), data.get('context', None))
+    await loop.run_in_executor(executor, llm_answer, data['message'], sio, sid, data.get('history', None)), data.get('context', None)
 
 
 if __name__ == "__main__":
