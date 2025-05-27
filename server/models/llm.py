@@ -1,4 +1,5 @@
 from llama_cpp import Llama
+from concurrent.futures import ProcessPoolExecutor
 
 llm = Llama.from_pretrained(
     repo_id="hungqbui/medgemma-4b-it-Q4_K_M-GGUF",
@@ -6,6 +7,7 @@ llm = Llama.from_pretrained(
     verbose=False,
     n_ctx=131072,
 )
+
 
 async def llm_answer(question, socket, sid, history=None, context=None):
 
@@ -33,7 +35,7 @@ async def llm_answer(question, socket, sid, history=None, context=None):
         stream=True
     )
 
-    for chunk in out:
+    async for chunk in out:
         if "choices" not in chunk or not chunk["choices"]:
             continue
         if "delta" not in chunk["choices"][0] or "content" not in chunk["choices"][0]["delta"]:
@@ -45,6 +47,3 @@ async def llm_answer(question, socket, sid, history=None, context=None):
 
 
     await socket.emit("stream_end", {}, to=sid)
-
-    return  "No response from LLM."
-    return out["choices"][0]["message"]["content"].strip() if out["choices"] else "No response from LLM."

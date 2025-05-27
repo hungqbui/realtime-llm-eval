@@ -14,9 +14,15 @@ import re
 from models.llm import llm_answer
 from models.facial import predict
 import io
+from concurrent.futures import ThreadPoolExecutor
+
+import torch
+GPU_IDS = list(range(torch.cuda.device_count()))
 
 app = Quart(__name__)
 app = cors(app, allow_origin="*")
+
+executor = ThreadPoolExecutor(max_workers=len(GPU_IDS) * 2)
 
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
 
@@ -26,6 +32,7 @@ CHUNK_SIZE        = int(SAMPLE_RATE * MIN_CHUNK_SIZE)
 
 transcribe_queue = defaultdict(asyncio.Queue)
 user_tasks = defaultdict(asyncio.Task)
+
 
 # diarize_queue = defaultdict(asyncio.Queue)
 # diarizer = None
@@ -63,7 +70,7 @@ async def handle_audio(sid, data):
 useCuda = input("Use CUDA? (y/n): ").strip().lower() == "y"
 model_str = input("Model name (e.g., tiny.en): ").strip()
 
-model = WhisperModel(model_str, device="auto" if not useCuda else "cuda", compute_type="int8" if not useCuda else "float16")
+model = WhisperModel(model_str, device="auto" if not useCuda else "cuda", compute_type="int8" if not useCuda else "float16", device_index=GPU_IDS if useCuda else None, num_workers=len(GPU_IDS))
 # diarizer = DiartDiarization()
 
 @sio.on("video")
