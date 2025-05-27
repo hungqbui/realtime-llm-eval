@@ -40,7 +40,6 @@ function App() {
     })
 
     socket.on("chat_response", (data : any) => {
-      console.log(data["message"])
       setFullText(prev => prev + data["message"]);
     })
 
