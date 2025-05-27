@@ -41,10 +41,13 @@ user_tasks = defaultdict(asyncio.Task)
 async def face_recognition():
     from PIL import Image
 
+    loop = asyncio.get_event_loop()
     files = await request.files
     image = Image.open(io.BytesIO(files.get("image").read()))
 
-    return jsonify({"message": predict(image)})
+    ans = await loop.run_in_executor(executor, predict, image)
+
+    return jsonify({"message": ans})
 
 app = socketio.ASGIApp(sio, app)
 
