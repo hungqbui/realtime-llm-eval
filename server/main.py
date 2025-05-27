@@ -135,8 +135,6 @@ async def transcribe(sid):
                 adjusted_start = word.start + window_num
                 adjusted_end = word.end + window_num
 
-                print(f"Word: {word.word}, Start: {adjusted_start}, End: {adjusted_end}")
-
                 if adjusted_start < last_word:
                     continue
 
