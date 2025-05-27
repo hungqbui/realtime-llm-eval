@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { socket } from './utils/socket'; 
 import './App.css'
 import ChatBox from './components/ChatBox';
+import { full } from '@huggingface/transformers';
 
 function App() {
 
@@ -23,7 +24,7 @@ function App() {
   const [emotion, setEmotion] = useState<string>("");
   const [waitingForResponse, setWaitingForResponse] = useState<boolean>(false);
   const [fullText, setFullText] = useState<string>("");
-
+  const fullTextRef = useRef<string>("");
   useEffect(() => {
 
     socket.on("connect", () => {
@@ -41,13 +42,14 @@ function App() {
 
     socket.on("chat_response", (data : any) => {
       setFullText(prev => prev + data["message"]);
+      fullTextRef.current += data["message"];
     })
 
     socket.on("stream_end", (data : any) => {
       setWaitingForResponse(false);
-      setAnswer(fullText);
-      setMessages(prev => [...prev, { type: "AI", content: fullText }]);
+      setMessages(prev => [...prev, { type: "AI", content: fullTextRef.current }]);
       setFullText("");
+      fullTextRef.current = "";
     })
 
     return () => {

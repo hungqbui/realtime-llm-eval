@@ -13,7 +13,6 @@ async def llm_answer(question, socket, sid, history=None, context=None):
 
     prompt += f"User: {question}\nAI:"
 
-    print(context)
 
     out = llm.create_chat_completion(
         messages=[
@@ -42,7 +41,7 @@ async def llm_answer(question, socket, sid, history=None, context=None):
         
         await socket.emit("chat_response", {"message": chunk["choices"][0]["delta"]["content"]}, to=sid)
 
-        print(chunk["choices"][0]["delta"]["content"], flush=True)
+        print(chunk["choices"][0]["delta"]["content"], end="", flush=True)
 
 
     await socket.emit("stream_end", {}, to=sid)
