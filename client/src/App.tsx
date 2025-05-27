@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef } from 'react'
 import { socket } from './utils/socket'; 
 import './App.css'
 import ChatBox from './components/ChatBox';
-import { full } from '@huggingface/transformers';
 
 function App() {
 
