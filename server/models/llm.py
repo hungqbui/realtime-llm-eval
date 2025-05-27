@@ -7,7 +7,7 @@ llm = Llama.from_pretrained(
     n_ctx=131072,
 )
 
-def llm_answer(question,socket, sid, history=None, context=None):
+def llm_answer(question, socket, sid, history=None, context=None):
 
     prompt = "".join([f"{i.get('type')}: {i.get('content')}\n" for i in history]) if history else ""
 
