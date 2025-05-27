@@ -70,7 +70,7 @@ async def handle_audio(sid, data):
 useCuda = input("Use CUDA? (y/n): ").strip().lower() == "y"
 model_str = input("Model name (e.g., tiny.en): ").strip()
 
-model = WhisperModel(model_str, device="auto" if not useCuda else "cuda", compute_type="int8" if not useCuda else "float16", device_index=GPU_IDS if useCuda else None, num_workers=len(GPU_IDS))
+model = WhisperModel(model_str, device="auto" if not useCuda else "cuda", compute_type="int8" if not useCuda else "float16", device_index=GPU_IDS if useCuda else None)
 # diarizer = DiartDiarization()
 
 @sio.on("video")
