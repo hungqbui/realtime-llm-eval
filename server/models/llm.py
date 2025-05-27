@@ -9,7 +9,7 @@ llm = Llama.from_pretrained(
 
 def llm_answer(question, history=None, context=None):
 
-    prompt = "".join([f"{i.get("type")}: {i.get("content")}\n" for i in history]) if history else ""
+    prompt = "".join([f"{i.get('type')}: {i.get('content')}\n" for i in history]) if history else ""
 
     prompt += f"User: {question}\nAI:"
 
