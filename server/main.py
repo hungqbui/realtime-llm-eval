@@ -1,4 +1,5 @@
-from quart import Quart, session
+import PIL.Image
+from quart import Quart, session, request, jsonify
 import socketio
 from quart_cors import cors
 import numpy as np
@@ -6,12 +7,13 @@ from faster_whisper import WhisperModel
 import wave
 import asyncio
 import uvicorn
-# from models.diarization import DiartDiarization
 import time
 import sys
 from collections import defaultdict
 import re
 from models.llm import llm_answer
+from models.facial import predict
+import io
 
 app = Quart(__name__)
 app = cors(app, allow_origin="*")
@@ -27,6 +29,17 @@ user_tasks = defaultdict(asyncio.Task)
 
 # diarize_queue = defaultdict(asyncio.Queue)
 # diarizer = None
+
+@app.route("/api/face_recognition", methods=["POST"])
+async def face_recognition():
+    from PIL import Image
+
+    files = await request.files
+    image = Image.open(io.BytesIO(files.get("image").read()))
+
+    return jsonify({"message": predict(image)})
+
+app = socketio.ASGIApp(sio, app)
 
 @sio.event
 def connect(sid, environ):
@@ -176,7 +189,6 @@ async def handle_chat_message(sid, data):
 
     await sio.emit("chat_response", {"message": f"{ans}"}, to=sid)
 
-app = socketio.ASGIApp(sio, app)
-
 if __name__ == "__main__":
+
     uvicorn.run(app, host="0.0.0.0", port=5000)

@@ -1,6 +1,15 @@
 # Load model directly
-from transformers import AutoImageProcessor, AutoModelForImageClassification
+from transformers import AutoImageProcessor, ViTForImageClassification
+import torch
 
-processor = AutoImageProcessor.from_pretrained("mo-thecreator/vit-Facial-Expression-Recognition")
-model = AutoModelForImageClassification.from_pretrained("mo-thecreator/vit-Facial-Expression-Recognition")
+def predict(image):
+    processor = AutoImageProcessor.from_pretrained("mo-thecreator/vit-Facial-Expression-Recognition")
+    model = ViTForImageClassification.from_pretrained("mo-thecreator/vit-Facial-Expression-Recognition")
+    inputs = processor(images=image, return_tensors="pt")
 
+    with torch.no_grad():
+        logits = model(**inputs, return_dict=True).logits
+
+    predicted_class_idx = logits.argmax(dim=1).item()
+
+    return model.config.id2label[predicted_class_idx]

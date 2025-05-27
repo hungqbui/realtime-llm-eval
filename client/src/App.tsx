@@ -18,6 +18,8 @@ function App() {
   const [titleSet, setTitleSet] = useState<boolean>(false);
   const [messages, setMessages] = useState<any[]>([]);
   const [message, setMessage] = useState<string>("");
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [emotion, setEmotion] = useState<string>("");
 
   useEffect(() => {
     socket.on("connect", () => {
@@ -37,6 +39,8 @@ function App() {
       setMessages(prev => [...prev, {type: "AI", content: data["message"]}]);
     })
 
+    
+
     return () => {
       socket.off("connect");
       socket.off("disconnect");
@@ -45,6 +49,46 @@ function App() {
     }
 
   }, []);
+
+  useEffect(() => {
+    
+    if (!isRecording) return;
+
+    const frameInterval = setInterval(async () => {
+      
+      if (!vidRef.current || !vidRef.current.srcObject) return;
+
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const context = canvas.getContext('2d');
+      if (!context) return;
+
+      canvas.width = vidRef.current.videoWidth;
+      canvas.height = vidRef.current.videoHeight;
+
+      context.drawImage(vidRef.current, 0, 0);
+      canvas.toBlob(async (blob) => {
+        const formData = new FormData();
+
+        formData.append("image", blob as Blob, "image.jpg");
+
+        fetch("/.proxy/api/face_recognition", {
+          method: "POST",
+          body: formData
+        }).then(async (response) => {
+          return response.json();
+        }).then((data) => {
+          setEmotion(data["message"])
+          console.log(`Emotion detected: ${data["message"]}`);
+        })
+      }, 'image/jpeg', 0.95);
+
+    }, 1000); 
+
+    return () => {
+      clearInterval(frameInterval);
+    };
+  }, [isRecording]);
 
   const startRecording = async () => {
     stream.current = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
@@ -114,6 +158,7 @@ function App() {
   if (titleSet)
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", width: "100vw" }}>
+        <canvas ref={canvasRef} style={{display: "none"}}></canvas>
         <div style={{ marginBottom: "16px" }}>
           <button onClick={async () => {
             if (!isRecording) startRecording();
@@ -130,6 +175,7 @@ function App() {
           width="640"
           height="480"
         ></video>
+        <p>{emotion}</p>
         <div style={{ marginTop: "16px", width: "50%", textAlign: "center", display: "flex", flexDirection: "row", justifyContent: "space-evenly" }}>
 
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "70%" }}>
