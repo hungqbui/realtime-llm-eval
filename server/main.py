@@ -207,10 +207,10 @@ async def handle_chat_message(sid, data):
 
     loop = asyncio.get_event_loop()
 
-    # def syncWrapper(*args, **kwargs):
-    #     return asyncio.new_event_loop().run_until_complete(llm_answer(*args, **kwargs))
+    def syncWrapper(*args, **kwargs):
+        return asyncio.new_event_loop().run_until_complete(llm_answer(*args, **kwargs))
 
-    # await loop.run_in_executor(executor, syncWrapper, data['message'], sio, sid, data.get('context', None), data.get('history', None))
+    await loop.run_in_executor(executor, syncWrapper, data['message'], sio, sid, data.get('context', None), data.get('history', None))
 
 
 if __name__ == "__main__":
