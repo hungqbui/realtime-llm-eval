@@ -210,7 +210,7 @@ async def handle_chat_message(sid, data):
     def syncWrapper(*args, **kwargs):
         return asyncio.new_event_loop().run_until_complete(llm_answer(*args, **kwargs))
 
-    await loop.run_in_executor(executor, syncWrapper, data['message'], sio, sid, data.get('history', None), data.get('context', None))
+    await loop.run_in_executor(executor, syncWrapper, data['message'], sio, sid, data.get('history', None), data.get('transcription', None))
 
 
 if __name__ == "__main__":
