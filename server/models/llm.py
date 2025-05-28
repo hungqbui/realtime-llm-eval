@@ -11,6 +11,8 @@ llm = Llama.from_pretrained(
 
 async def llm_answer(question, socket, sid, history=None, context=None):
 
+    print(context)
+
     prompt = "".join([f"{i.get('type')}: {i.get('content')}\n" for i in history]) if history else ""
 
     prompt += f"User: {question}\nAI:"

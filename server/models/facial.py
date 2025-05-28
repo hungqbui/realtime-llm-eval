@@ -3,8 +3,8 @@ from transformers import AutoImageProcessor, ViTForImageClassification
 import torch
 
 def predict(image):
-    processor = AutoImageProcessor.from_pretrained("mo-thecreator/vit-Facial-Expression-Recognition")
-    model = ViTForImageClassification.from_pretrained("mo-thecreator/vit-Facial-Expression-Recognition")
+    processor = AutoImageProcessor.from_pretrained("mo-thecreator/vit-Facial-Expression-Recognition").to("cuda" if torch.cuda.is_available() else "cpu")
+    model = ViTForImageClassification.from_pretrained("mo-thecreator/vit-Facial-Expression-Recognition").to("cuda" if torch.cuda.is_available() else "cpu")
     inputs = processor(images=image, return_tensors="pt")
 
     with torch.no_grad():
