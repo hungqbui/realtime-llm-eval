@@ -8,11 +8,15 @@ processor = AutoImageProcessor.from_pretrained("mo-thecreator/vit-Facial-Express
 model = ViTForImageClassification.from_pretrained("mo-thecreator/vit-Facial-Expression-Recognition").to(device)
 
 def predict(image):
-    inputs = processor(images=image, return_tensors="pt").to(device)
+    try:
+        inputs = processor(images=image, return_tensors="pt").to(device)
 
-    with torch.no_grad():
-        logits = model(**inputs, return_dict=True).logits
+        with torch.no_grad():
+            logits = model(**inputs, return_dict=True).logits
 
-    predicted_class_idx = logits.argmax(dim=1).item()
+        predicted_class_idx = logits.argmax(dim=1).item()
+    except Exception as e:
+        print(f"Error during prediction: {e}")
+        return "Error during prediction"
 
     return model.config.id2label[predicted_class_idx]
