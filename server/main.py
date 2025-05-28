@@ -16,26 +16,34 @@ from models.facial import predict
 import io
 from concurrent.futures import ThreadPoolExecutor
 
+try:
+    from models.diarization import DiartDiarization
+except Exception as e:
+    print("Diarization model not found. Please install the required dependencies.")
+    sys.exit(1)
+
 import torch
 GPU_IDS = list(range(torch.cuda.device_count()))
 
 app = Quart(__name__)
 app = cors(app, allow_origin="*")
 
-executor = ThreadPoolExecutor(max_workers=len(GPU_IDS) * 2)
+executor = ThreadPoolExecutor(max_workers=4)
 
-sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
+try:
+    sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
+except Exception as e:
+    print("SocketIO not installed. Please install the required dependencies.")
+    sys.exit(1)
 
 SAMPLE_RATE       = 16_000
 MIN_CHUNK_SIZE    = 3               # seconds
 CHUNK_SIZE        = int(SAMPLE_RATE * MIN_CHUNK_SIZE)
 
 transcribe_queue = defaultdict(asyncio.Queue)
-user_tasks = defaultdict(asyncio.Task)
+diarize_queue = defaultdict(asyncio.Queue)
+user_tasks = defaultdict(list)
 
-
-# diarize_queue = defaultdict(asyncio.Queue)
-# diarizer = None
 
 @app.route("/api/face_recognition", methods=["POST"])
 async def face_recognition():
@@ -49,7 +57,11 @@ async def face_recognition():
 
     return jsonify({"message": ans})
 
-app = socketio.ASGIApp(sio, app)
+try:
+    app = socketio.ASGIApp(sio, app)
+except Exception as e:
+    print("ASGIApp not found. Please install the required dependencies.")
+    sys.exit(1)
 
 @sio.event
 def connect(sid, environ):
@@ -74,12 +86,11 @@ useCuda = input("Use CUDA? (y/n): ").strip().lower() == "y"
 model_str = input("Model name (e.g., tiny.en): ").strip()
 
 try:
-    model = WhisperModel(model_str, device="auto" if not useCuda else "cuda", compute_type="int8", device_index=GPU_IDS if useCuda else None)
+    model = WhisperModel(model_str, device="auto" if not useCuda else "cuda", compute_type="int8", device_index=GPU_IDS if useCuda else 0)
 except Exception as e:
     print(f"Error loading Whisper model: {e}")
     sys.exit(1)
 
-# diarizer = DiartDiarization()
 
 @sio.on("video")
 async def handle_video(sid, data):
@@ -87,17 +98,29 @@ async def handle_video(sid, data):
         f.write(data["video_data"])
 
 
-# async def diarize():
-#     while True:
-#         pcm = await diarize_queue.get()
-#         if pcm is None:
-#             diarize_queue.task_done()
+async def diarize(sid):
+    pass
+    
+    # try:
+    #     diarizer = DiartDiarization(use_microphone=False)
+    # except Exception as e:
+    #     print(f"Error initializing diarizer: {e}")
+    #     await sio.emit("error", {"message": "Error initializing diarizer"}, to=sid)
+    #     return
+    
+    # while True:
+    #     pcm = await diarize_queue.get()
+    #     if pcm is None:
+    #         diarize_queue.task_done()
+    #         break
 
-#             break
+    #     res = await diarizer.diarize(pcm)
 
-#         diarize_queue.task_done()
+    #     print(res)
 
-async def model_run(buffer, prompt=None):
+    #     diarize_queue.task_done()
+
+def model_run(buffer, prompt=None):
     try:
         segments, info = model.transcribe(
             np.concatenate(buffer).astype(np.float32),
@@ -137,7 +160,7 @@ async def transcribe(sid):
         before = time.perf_counter()
 
         try:
-            segments, _ = await model_run(buffer, prompt=" ".join(prompt))
+            segments, _ = await asyncio.get_event_loop().run_in_executor(executor, model_run, buffer)
         except Exception as e:
             print(f"Error during transcription: {e}")
             await sio.emit("error", {"message": "Error during transcription"}, to=sid)
@@ -184,21 +207,23 @@ async def start_up(sid):
 
     transcribe_queue[sid] = asyncio.Queue()
 
-    user_tasks[sid] = sio.start_background_task(transcribe, sid)
+    user_tasks[sid].append(sio.start_background_task(transcribe, sid))
+    user_tasks[sid].append(sio.start_background_task(diarize, sid))
 
 @sio.on("stop")
 async def handle_stop(sid):
-    global transcribe_queue, user_tasks
-
+    global transcribe_queue, user_tasks, diarize_queue
+    transcribe_queue[sid].put_nowait(None)  # Signal to stop transcription
     if user_tasks.get(sid):
-        if user_tasks[sid] and not user_tasks[sid].done():
-            user_tasks[sid].cancel()
-            await user_tasks[sid]
+        for task in user_tasks[sid]:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*user_tasks[sid], return_exceptions=True)
 
         del transcribe_queue[sid]
+        del diarize_queue[sid]
         del user_tasks[sid]
 
-    # 3) inform the client
     await sio.emit("stopped", {"message": "Transcription stopped"}, to=sid)
 
 @sio.on("chat_message")
@@ -214,5 +239,8 @@ async def handle_chat_message(sid, data):
 
 
 if __name__ == "__main__":
-
-    uvicorn.run(app, host="0.0.0.0", port=5000)
+    try:
+        uvicorn.run(app, host="0.0.0.0", port=5000)
+    except Exception as e:
+        print(f"Error starting server: {e}")
+        sys.exit(1)
