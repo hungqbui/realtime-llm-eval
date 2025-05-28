@@ -127,7 +127,11 @@ async def transcribe(sid):
 
         before = time.perf_counter()
 
-        segments, _ = await model_run(buffer, prompt=" ".join(prompt))
+        try:
+            segments, _ = await model_run(buffer, prompt=" ".join(prompt))
+        except Exception as e:
+            print(f"Error during transcription: {e}")
+            await sio.emit("error", {"message": "Error during transcription"}, to=sid)
         cur = []
 
         for seg in segments:
