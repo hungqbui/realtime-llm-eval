@@ -197,7 +197,7 @@ async def handle_chat_message(sid, data):
     def syncWrapper(*args, **kwargs):
         return llm_answer(*args, **kwargs)
 
-    await loop.run_in_executor(executor, syncWrapper, data['message'], socket=sio, sid=sid, context=data.get('context', None), history=data.get('history', None))
+    await loop.run_in_executor(executor, syncWrapper, data['message'], sio, sid, data.get('context', None), data.get('history', None))
 
 
 if __name__ == "__main__":
