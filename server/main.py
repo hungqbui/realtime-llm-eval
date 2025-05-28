@@ -74,7 +74,7 @@ useCuda = input("Use CUDA? (y/n): ").strip().lower() == "y"
 model_str = input("Model name (e.g., tiny.en): ").strip()
 
 try:
-    model = WhisperModel(model_str, device="auto" if not useCuda else "cuda", compute_type="int8" if not useCuda else "float16", device_index=GPU_IDS if useCuda else None)
+    model = WhisperModel(model_str, device="auto" if not useCuda else "cuda", compute_type="int8", device_index=GPU_IDS if useCuda else None)
 except Exception as e:
     print(f"Error loading Whisper model: {e}")
     sys.exit(1)
