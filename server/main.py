@@ -98,14 +98,18 @@ async def handle_video(sid, data):
 #         diarize_queue.task_done()
 
 async def model_run(buffer, prompt=None):
-    segments, info = model.transcribe(
-        np.concatenate(buffer).astype(np.float32),
-        language="en",
-        beam_size=5,
-        vad_filter=True,
-        condition_on_previous_text=True,
-        word_timestamps=True,
-    )
+    try:
+        segments, info = model.transcribe(
+            np.concatenate(buffer).astype(np.float32),
+            language="en",
+            beam_size=5,
+            vad_filter=True,
+            condition_on_previous_text=True,
+            word_timestamps=True,
+        )
+    except Exception as e:
+        print(f"Error during model run: {e}")
+        return [], {}
     return segments, info
 
 async def transcribe(sid):
