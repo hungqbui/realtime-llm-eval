@@ -18,7 +18,8 @@ async def llm_answer(question, socket, sid, history=None, context=None):
 
     prompt += f"User: {question}\nAI:"
 
-    
+    print(context)
+
     out = llm.create_chat_completion(
         messages=[
             {
