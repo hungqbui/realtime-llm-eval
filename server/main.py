@@ -70,8 +70,15 @@ async def handle_audio(sid, data):
         print(f"Error processing audio: {e}")
         await sio.emit("error", {"message": "Error processing audio"})
 
-useCuda = input("Use CUDA? (y/n): ").strip().lower() == "y"
-model_str = input("Model name (e.g., tiny.en): ").strip()
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--model", required=True)
+parser.add_argument("--cuda", action="store_true", help="Use CUDA for GPU acceleration")
+args = parser.parse_args()
+
+useCuda = args.cuda
+model_str = args.model
 
 try:
     model = WhisperModel(model_str, device="auto" if not useCuda else "cuda", compute_type="int8", device_index=GPU_IDS if useCuda else None)
@@ -106,6 +113,7 @@ async def model_run(buffer, prompt=None):
             vad_filter=True,
             condition_on_previous_text=True,
             word_timestamps=True,
+            initial_prompt=prompt,
         )
     except Exception as e:
         print(f"Error during model run: {e}")
@@ -148,10 +156,10 @@ async def transcribe(sid):
                 adjusted_start = word.start + window_num
                 adjusted_end = word.end + window_num
 
-                if adjusted_start < last_word:
+                if adjusted_start < last_word or word.probability < 0.7:
                     continue
 
-                cur.append(re.sub(r'[^A-Za-z]+', '', word.word))
+                cur.append(word.word)
                 last_word = adjusted_end
         
         buffer.popleft()
@@ -215,4 +223,4 @@ async def handle_chat_message(sid, data):
 
 if __name__ == "__main__":
 
-    uvicorn.run(app, host="0.0.0.0", port=5000)
+    uvicorn.run(app, host="0.0.0.0", port=5001)
