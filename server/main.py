@@ -37,17 +37,7 @@ user_tasks = defaultdict(asyncio.Task)
 # diarize_queue = defaultdict(asyncio.Queue)
 # diarizer = None
 
-@app.route("/api/face_recognition", methods=["POST"])
-async def face_recognition():
-    from PIL import Image
 
-    loop = asyncio.get_event_loop()
-    files = await request.files
-    image = Image.open(io.BytesIO(files.get("image").read()))
-
-    ans = await loop.run_in_executor(executor, predict, image)
-
-    return jsonify({"message": ans})
 
 app = socketio.ASGIApp(sio, app)
 
@@ -58,6 +48,22 @@ def connect(sid, environ):
 @sio.event
 def disconnect(sid):
     print("Client disconnected")
+
+@sio.on("face_recognition")
+async def face_recognition(sid, data):
+    from PIL import Image
+
+
+    try:
+        loop = asyncio.get_event_loop()
+        image = Image.open(io.BytesIO(data["image_data"]))
+        ans = await loop.run_in_executor(executor, predict, image)
+        await sio.emit("face_recognition_ans", {"message": ans}, to=sid)
+    except Exception as e:
+        print(f"Error processing image: {e}")
+        await sio.emit("error", {"message": "Error processing image"}, to=sid)
+        return
+
 
 @sio.on("audio")
 async def handle_audio(sid, data):
@@ -113,7 +119,6 @@ async def model_run(buffer, prompt=None):
             vad_filter=True,
             condition_on_previous_text=True,
             word_timestamps=True,
-            initial_prompt=prompt,
         )
     except Exception as e:
         print(f"Error during model run: {e}")
@@ -145,7 +150,7 @@ async def transcribe(sid):
         before = time.perf_counter()
 
         try:
-            segments, _ = await model_run(buffer, prompt=" ".join(prompt))
+            segments, _ = await model_run(buffer)
         except Exception as e:
             print(f"Error during transcription: {e}")
             await sio.emit("error", {"message": "Error during transcription"}, to=sid)
@@ -159,13 +164,13 @@ async def transcribe(sid):
                 if adjusted_start < last_word or word.probability < 0.7:
                     continue
 
-                cur.append(word.word)
+                cur.append(re.sub(r'[^A-Za-z]+', '', word.word))
                 last_word = adjusted_end
         
         buffer.popleft()
         buffer.popleft()
 
-        window_num += 0.511
+        window_num += (4096 / SAMPLE_RATE) * 2 
         if not cur:
             transcribe_queue[sid].task_done()
             continue

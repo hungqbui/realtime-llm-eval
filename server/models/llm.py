@@ -14,14 +14,17 @@ except Exception as e:
 
 async def llm_answer(question, socket, sid, history=None, context=None):
 
-    prompt = "".join([f"{i.get('type')}: {i.get('content')}\n" for i in history]) if history else ""
+    prompt = [{
+        "role": "system" if h.get("type") == "AI" else "user",
+        "content": h.get("text") 
+    } for h in history] if history else []
 
-    prompt += f"User: {question}\nAI:"
+    prompt.append({
+        "role": "user",
+        "content": question
+    })
 
-    print(context)
-
-    out = llm.create_chat_completion(
-        messages=[
+    messages=[
             {
                 "role": "system",
                 "content": "You are a helpful assistant that answers questions of a conversation base on the context of the transcription.",
@@ -34,8 +37,11 @@ async def llm_answer(question, socket, sid, history=None, context=None):
                 "role": "system",
                 "content": "Thank you for the context. I am now aware of the details of the conversation and ready to answer any questions.",
             },
-            {"role": "user", "content": prompt},
-        ],
+            *prompt
+        ]
+
+    out = llm.create_chat_completion(
+        messages=messages,
         stream=True
     )
 
@@ -46,8 +52,5 @@ async def llm_answer(question, socket, sid, history=None, context=None):
             continue
         
         await socket.emit("chat_response", {"message": chunk["choices"][0]["delta"]["content"]}, to=sid)
-
-        print(chunk["choices"][0]["delta"]["content"], end="", flush=True)
-
 
     await socket.emit("stream_end", {}, to=sid)
