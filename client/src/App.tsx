@@ -117,7 +117,7 @@ function App() {
 
       }, 'image/jpeg', 0.95);
 
-    }, 30000);
+    }, 10000);
 
     return () => {
       clearInterval(frameInterval);
