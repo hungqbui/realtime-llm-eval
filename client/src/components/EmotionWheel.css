@@ -1,0 +1,112 @@
+
+
+.timeline-scroll-container {
+    overflow-x: auto;
+    position: relative; /* Crucial for positioning the fade pseudo-elements */
+    min-width: 60vw;
+    max-width: 1000px;
+}
+
+/* Styles to hide the scrollbar */
+.hidden-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+.hidden-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+
+.timeline-track {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    padding-top: 16px;
+    padding-bottom: 16px; 
+    /* Add horizontal padding to ensure content scrolls under fades */
+    padding-left: 24px; /* Was 16px, increased for better fade interaction */
+    padding-right: 24px; /* Was 32px, adjusted for symmetry with left */
+    min-width: max-content;
+}
+
+.timeline-line {
+    position: absolute;
+    /* Adjusted top to align better with dot centers */
+    top: calc(16px + 0.875rem + 8px + 0.5rem); /* padding-top + time_font_size + time_margin_bottom + dot_height/2 */
+    left: 0; /* Extend to the very edges of the track parent */
+    right: 0;
+    height: 2px;
+    background-color: #4b5563; /* Line color */
+    z-index: 0; /* Behind dots */
+}
+
+.timeline-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    position: relative;
+    z-index: 1; /* Above the line */
+    flex-shrink: 0;
+    width: 112px;
+    cursor: pointer;
+    margin-right: 64px; /* Spacing between items */
+}
+.timeline-item:last-child {
+    margin-right: 0; /* No margin for the last item */
+}
+
+.no-select {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+.timeline-item-time {
+    font-size: 0.875rem;
+    color: #9ca3af;
+    margin-bottom: 8px;
+}
+
+
+.timeline-item-dot {
+    width: 1rem; /* Dot size */
+    height: 1rem; /* Dot size */
+    background-color: var(--dot-color, #38bdf8); /* Default color */
+    border-radius: 9999px; /* Make it round */
+    border: 2px solid #1f2937; /* Border matching card background for "punch-out" effect */
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+    transition: transform 0.2s ease-in-out;
+}
+.timeline-item:hover .timeline-item-dot {
+    transform: scale(1.15); /* Slightly larger hover effect */
+}
+
+.timeline-item-label {
+    margin-top: 8px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #d1d5db;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Message Area (for custom notifications instead of alert) */
+.message-area {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #374151;
+    color: #e5e7eb;
+    padding: 10px 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    z-index: 1000; /* High z-index to be on top */
+    transition: opacity 0.5s ease;
+    opacity: 1;
+}
+.message-area.hidden {
+    opacity: 0;
+    pointer-events: none;
+}

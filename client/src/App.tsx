@@ -3,27 +3,37 @@ import React, { useState, useEffect, useRef } from 'react'
 import { socket } from './utils/socket'; 
 import './App.css'
 import ChatBox from './components/ChatBox';
+import TranscriptionBox from './components/TranscriptionBox';
+import EmotionWheel from './components/EmotionWheel';
 
 function App() {
 
-  const audioCtx = useRef<AudioContext | null>(null);
   const [isRecording, setIsRecording] = useState(false);
-  const processor = useRef<ScriptProcessorNode | null>(null);
-  const input = useRef<MediaStreamAudioSourceNode | null>(null);
-  const stream = useRef<MediaStream | null>(null);
-  const vidRecorder = useRef<MediaRecorder | null>(null);
-  const [answer, setAnswer] = useState<string>("");
-  const vidRef = useRef<HTMLVideoElement | null>(null);
-  const timeRef = useRef<number>(0);
+  const [transcription, setTranscription] = useState<any[]>([]);
   const [title, setTitle] = useState<string>("");
   const [titleSet, setTitleSet] = useState<boolean>(false);
   const [messages, setMessages] = useState<any[]>([]);
   const [message, setMessage] = useState<string>("");
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [emotion, setEmotion] = useState<string>("");
+  const [emotions, setEmotions] = useState<any[]>([]);
   const [waitingForResponse, setWaitingForResponse] = useState<boolean>(false);
   const [fullText, setFullText] = useState<string>("");
+  
+  const audioCtx = useRef<AudioContext | null>(null);
+  const processor = useRef<ScriptProcessorNode | null>(null);
+  const input = useRef<MediaStreamAudioSourceNode | null>(null);
+  const stream = useRef<MediaStream | null>(null);
+  const vidRecorder = useRef<MediaRecorder | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fullTextRef = useRef<string>("");
+  const fullTextTimeRef = useRef<string>("");
+  const vidRef = useRef<HTMLVideoElement | null>(null);
+  const timeRef = useRef<string>("");
+
+  const getCurrentTime = () => {
+    const date = new Date();
+    return `${date.getHours()}:${date.getMinutes()}`;
+  }
+
   useEffect(() => {
 
     socket.on("connect", () => {
@@ -35,29 +45,49 @@ function App() {
     });
 
     socket.on("audio_ans", (data : any) => {
-      setAnswer(prev => prev + " " + data["text"]);
-      console.log(`Time taken to update client: ${performance.now() - timeRef.current}`);
+      const lastEmitted = timeRef.current;
+      timeRef.current = getCurrentTime();
+
+      if (timeRef.current != lastEmitted) {
+        setTranscription(prev => [...prev, { text: data["text"], time: getCurrentTime() }]);
+      }
+      else {
+        setTranscription(prev => {
+          const newTranscription = [...prev];
+          newTranscription[newTranscription.length - 1].text += ` ${data["text"]}`;
+          return newTranscription;
+        });
+      }
     })
 
     socket.on("chat_response", (data : any) => {
       setFullText(prev => prev + data["message"]);
       fullTextRef.current += data["message"];
+      if (!fullTextTimeRef.current) fullTextTimeRef.current = getCurrentTime();
     })
 
     socket.on("stream_end", (data : any) => {
       setWaitingForResponse(false);
       const temp = fullTextRef.current;
-      setMessages(prev => [...prev, { type: "AI", content: temp }]);
+      const tempTime = fullTextTimeRef.current;
+      setMessages(prev => [...prev, { type: "AI", content: temp, time: tempTime }]);
 
       setFullText("");
       fullTextRef.current = "";
+      fullTextTimeRef.current = "";
     })
+
+    socket.on("face_recognition_ans", (data : any) => {
+      setEmotions(prev => [...prev, {time: getCurrentTime(), emotion: data["message"]}]);
+    });
 
     return () => {
       socket.off("connect");
       socket.off("disconnect");
       socket.off("audio_ans");
       socket.off("chat_response");
+      socket.off("stream_end");
+      socket.off("face_recognition_ans");
     }
 
   }, []);
@@ -79,22 +109,15 @@ function App() {
 
       context.drawImage(vidRef.current, 0, 0);
       canvas.toBlob(async (blob) => {
-        const formData = new FormData();
+        const buf = await blob?.arrayBuffer();
 
-        formData.append("image", blob as Blob, "image.jpg");
+        socket.emit("face_recognition", {
+          "image_data": buf,
+        });
 
-        fetch("/.proxy/api/face_recognition", {
-          method: "POST",
-          body: formData
-        }).then(async (response) => {
-          return response.json();
-        }).then((data) => {
-          setEmotion(data["message"])
-          console.log(`Emotion detected: ${data["message"]}`);
-        })
       }, 'image/jpeg', 0.95);
 
-    }, 1000); 
+    }, 1000);
 
     return () => {
       clearInterval(frameInterval);
@@ -127,8 +150,6 @@ function App() {
     
     processor.current.onaudioprocess = async (e) => {
       const data = e.inputBuffer.getChannelData(0);
-      
-      timeRef.current = performance.now(); 
       sendChunkToServer(data);
     };
     input.current?.connect(processor.current);
@@ -162,8 +183,10 @@ function App() {
       return
     }
 
-    setMessages([...messages, {type: "User", content: message}]);
-    socket.emit("chat_message", { message, title, transcription: answer, history: messages.slice(-10) });
+    setMessages([...messages, {type: "User", content: message, time: getCurrentTime()}]);
+    socket.emit("chat_message", { message, title, transcription: transcription.map((obj) => {
+      return `${obj.time} ${obj.text}`;
+    }).join("\n"), history: messages.slice(-10) });
     setMessage("");
   }
 
@@ -187,12 +210,12 @@ function App() {
           width="640"
           height="480"
         ></video>
-        <p>{emotion}</p>
-        <div style={{ marginTop: "16px", width: "50%", textAlign: "center", display: "flex", flexDirection: "row", justifyContent: "space-evenly" }}>
+        <EmotionWheel emotions={emotions} />
+        <div style={{ marginTop: "16px", width: "90%", textAlign: "center", display: "flex", flexDirection: "row", justifyContent: "space-evenly" }}>
 
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "70%" }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "60%" }}>
             <p>Chatbox</p>
-            <ChatBox messages={messages} temp={fullText} />
+            <ChatBox messages={messages} temp={fullText} temptime={fullTextTimeRef.current} />
             <div style={{ marginTop: "16px", width: "100%" }}>
               <input onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -203,9 +226,9 @@ function App() {
             </div>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "30%", height: "100%", margin: 0 }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "left", width: "40%", margin: 0 }}>
             <p>Transcription</p>
-            <textarea style={{ width: "100%", height: "400px" }} value={answer} readOnly />
+            <TranscriptionBox messages={transcription} />
           </div>
 
         </div>

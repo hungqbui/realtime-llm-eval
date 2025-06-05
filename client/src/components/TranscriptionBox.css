@@ -1,0 +1,62 @@
+.timeline-messages-container {
+    overflow-y: auto;
+    height: 40vh;
+    width: 100%;
+}
+
+.message-item {
+    display: flex;
+    align-items: flex-start;
+    margin:2rem 1rem;
+}
+.message-item__timestamp {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #9ca3af; /* Lighter timestamp (gray-400) */
+    padding-right: 0.75rem;
+    text-align: right;
+    flex-shrink: 0;
+}
+.message-item__decorator {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-right: 1rem;
+    position: relative;
+    align-self: stretch;
+}
+.message-item__bullet {
+    background-color: #60a5fa; /* Brighter blue (blue-400) */
+    border-radius: 9999px;
+    width: 0.75rem;
+    height: 0.75rem;
+    box-shadow: 0 0 0 4px #374151; /* Ring color matches darker handle (gray-700) */
+    z-index: 2;
+    position: relative;
+}
+.message-item__line {
+    position: absolute;
+    top: 0.375rem;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2px;
+    background-color: #4b5563; /* Darker line (gray-600) */
+    bottom: -2rem;
+    z-index: 1;
+}
+.message-item__content-box {
+    background-color: #374151; /* Dark content box (gray-700) */
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.15); /* Adjusted shadow */
+    width: 100%;
+    min-width: 60%;
+}
+.message-item__text {
+    color: #d1d5db; /* Light text (gray-300) */
+    font-size: 0.875rem;
+    word-wrap: break-word;
+}
+.timeline-messages-container {
+    position: relative;
+}
