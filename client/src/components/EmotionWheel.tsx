@@ -74,13 +74,14 @@ const EmotionWheel = (props: any) => {
 };
 
 
-const EmotionItem = ({emotion, time} : any) => {
+const EmotionItem = ({emotion, time, conf} : any) => {
     return (
         <div
             className="timeline-item "
         >
             <div className="timeline-item-time">{time}</div>
             <div className="timeline-item-label">{emotion}</div>
+            <div className="timeline-item-conf">{conf}</div>
         </div>
     )
 }

@@ -78,7 +78,7 @@ function App() {
     })
 
     socket.on("face_recognition_ans", (data : any) => {
-      setEmotions(prev => [...prev, {time: getCurrentTime(), emotion: data["message"]}]);
+      setEmotions(prev => [...prev, {time: getCurrentTime(), emotion: data["message"], conf: data["conf"]}]);
     });
 
     return () => {
