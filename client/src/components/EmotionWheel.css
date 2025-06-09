@@ -23,9 +23,8 @@
     padding-top: 16px;
     padding-bottom: 16px; 
     /* Add horizontal padding to ensure content scrolls under fades */
-    padding-left: 24px; /* Was 16px, increased for better fade interaction */
-    padding-right: 24px; /* Was 32px, adjusted for symmetry with left */
     min-width: max-content;
+    min-height: 3rem;
 }
 
 .timeline-line {

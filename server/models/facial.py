@@ -15,8 +15,9 @@ def predict(image):
             logits = model(**inputs, return_dict=True).logits
 
         predicted_class_idx = logits.argmax(dim=1).item()
+        max_prob = logits.softmax(dim=1).max().item()
     except Exception as e:
         print(f"Error during prediction: {e}")
         return "Error during prediction"
 
-    return model.config.id2label[predicted_class_idx]
+    return model.config.id2label[predicted_class_idx], max_prob

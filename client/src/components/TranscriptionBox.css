@@ -50,7 +50,6 @@
     border-radius: 0.5rem;
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.15); /* Adjusted shadow */
     width: 100%;
-    min-width: 60%;
 }
 .message-item__text {
     color: #d1d5db; /* Light text (gray-300) */

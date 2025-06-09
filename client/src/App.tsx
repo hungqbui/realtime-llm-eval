@@ -6,6 +6,7 @@ import ChatBox from './components/ChatBox';
 import TranscriptionBox from './components/TranscriptionBox';
 import EmotionWheel from './components/EmotionWheel';
 
+
 function App() {
 
   const [isRecording, setIsRecording] = useState(false);
@@ -17,7 +18,8 @@ function App() {
   const [emotions, setEmotions] = useState<any[]>([]);
   const [waitingForResponse, setWaitingForResponse] = useState<boolean>(false);
   const [fullText, setFullText] = useState<string>("");
-  
+  const [leftWidth, setLeftWidth] = useState<number>(50);
+
   const audioCtx = useRef<AudioContext | null>(null);
   const processor = useRef<ScriptProcessorNode | null>(null);
   const input = useRef<MediaStreamAudioSourceNode | null>(null);
@@ -28,10 +30,75 @@ function App() {
   const fullTextTimeRef = useRef<string>("");
   const vidRef = useRef<HTMLVideoElement | null>(null);
   const timeRef = useRef<string>("");
+  const isResizing = useRef<boolean>(false);
+
+  const useEventListener = (eventName : any, handler : any, element = window) => {
+    
+    const savedHandler = useRef<any>("");
+    useEffect(() => {
+      savedHandler.current = handler;
+    }, [handler]);
+
+    useEffect(() => {
+      // Make sure element supports addEventListener
+      const isSupported = element && element.addEventListener;
+      if (!isSupported) return;
+
+      // Create event listener that calls handler function stored in ref
+      const eventListener = (event : any) => savedHandler.current(event);
+
+      // Add event listener
+      element.addEventListener(eventName, eventListener);
+
+      // Remove event listener on cleanup
+      return () => {
+        element.removeEventListener(eventName, eventListener);
+      };
+    }, [eventName, element]); // Re-run if eventName or element changes
+  };
+
+  
+  const handleMouseDown = (e : any) => {
+    // Prevent text selection while dragging
+    e.preventDefault();
+    isResizing.current = true;
+  };
+  
+  const handleMouseUp = () => {
+    // Stop resizing
+    isResizing.current = false;
+  };
+  
+  const handleMouseMove = (e : any) => {
+    if (!isResizing.current) return;
+    
+    const containerWidth = document.body.clientWidth;
+    const newWidth = (e.clientX / containerWidth) * 100;
+    
+    // Clamp the width between 10% and 90%
+    if (newWidth >= 5 && newWidth <= 95) {
+      setLeftWidth(newWidth);
+    }
+  };
+  
+  useEventListener('mousemove', handleMouseMove);
+  useEventListener('mouseup', handleMouseUp);
+  
+  const handleTouchStart = (e : any) => {
+    e.preventDefault();
+    isResizing.current = true;
+  };
 
   const getCurrentTime = () => {
     const date = new Date();
-    return `${date.getHours()}:${date.getMinutes()}`;
+    return `${date.getHours()}:${padDigit(date.getMinutes())}`;
+  }
+
+  const padDigit = (num: number) => {
+    if (num < 10) {
+      return `0${num}`;
+    }
+    return num.toString();
   }
 
   useEffect(() => {
@@ -70,7 +137,15 @@ function App() {
       setWaitingForResponse(false);
       const temp = fullTextRef.current;
       const tempTime = fullTextTimeRef.current;
-      setMessages(prev => [...prev, { type: "AI", content: temp, time: tempTime }]);
+
+      if (data["message"] == "END") {
+        setMessages(prev => [...prev, { type: "AI", content: temp, time: tempTime }]);
+      } else {
+        setMessages(prev => {
+          return prev.slice(0, -1);
+        })
+      }
+
 
       setFullText("");
       fullTextRef.current = "";
@@ -78,6 +153,7 @@ function App() {
     })
 
     socket.on("face_recognition_ans", (data : any) => {
+      console.log(data)
       setEmotions(prev => [...prev, {time: getCurrentTime(), emotion: data["message"], conf: data["conf"]}]);
     });
 
@@ -176,6 +252,12 @@ function App() {
     });
   }
 
+  function stopHandler(event: any) {
+    if (!waitingForResponse) return;
+
+    socket.emit("stop_chat");
+  }
+
   function textMessageHandler(event: any) {
     if (waitingForResponse) return
 
@@ -188,13 +270,14 @@ function App() {
       return `${obj.time} ${obj.text}`;
     }).join("\n"), history: messages.slice(-10) });
     setMessage("");
+    setWaitingForResponse(true);
   }
 
   if (titleSet)
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", width: "100vw" }}>
         <canvas ref={canvasRef} style={{display: "none"}}></canvas>
-        <div style={{ marginBottom: "16px" }}>
+        <div >
           <button onClick={async () => {
             if (!isRecording) startRecording();
             else stopRecording();
@@ -202,39 +285,53 @@ function App() {
             { isRecording ? "Stop" : "Start" }
           </button>
         </div>
-        <video style={{ border: "1px solid black", }}
+        <video style={{ border: "1px solid black", maxWidth:"40%" }}
           ref={vidRef}
           muted
           autoPlay
           playsInline
-          width="640"
-          height="480"
+          height="40%"
         ></video>
         <EmotionWheel emotions={emotions} />
-        <div style={{ marginTop: "16px", width: "90%", textAlign: "center", display: "flex", flexDirection: "row", justifyContent: "space-evenly" }}>
+        <div style={{ marginTop: "16px", width: "100%", textAlign: "center", display: "flex", flexDirection: "row", justifyContent: "space-evenly" }}>
 
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "60%" }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: `${leftWidth}%` }}>
             <p>Chatbox</p>
             <ChatBox messages={messages} temp={fullText} temptime={fullTextTimeRef.current} />
-            <div style={{ marginTop: "16px", width: "100%" }}>
-              <input onKeyDown={(e) => {
+            <div style={{width: "100%", position: "relative", display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "space-between"}}>
+              <textarea rows={1} placeholder='Ask MedGemma...' className='input-text' onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   textMessageHandler(e);
                 }
-              }} style={{ height: "100%", width: "50%", marginRight: "8px" }} type="text" value={message} onChange={(e) => setMessage(e.target.value)} />
-              <button onClick={textMessageHandler} disabled={waitingForResponse}>Send</button>
+              }} value={message} onChange={(e) => setMessage(e.target.value)} />
+              <button onClick={e => {
+                if (waitingForResponse) {
+                  stopHandler(e);
+                }
+                else {
+                  textMessageHandler(e);
+                }
+              }} className='send-button' aria-label="Send message">
+              { !waitingForResponse ? 
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#b2b2b2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> :
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#b2b2b2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+              }
+            </button>
             </div>
           </div>
-
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "left", width: "40%", margin: 0 }}>
-            <p>Transcription</p>
+          <div className="resizer" 
+              onMouseDown={handleMouseDown}
+              onTouchStart={handleTouchStart}
+              role="separator"
+          >
+            <div className="resize-handle"></div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", textAlign: "left", width: `${100 - leftWidth}%`, margin: 0 }}>
+            <p style={{width: "100%", textAlign: "center"}}>Transcription</p>
             <TranscriptionBox messages={transcription} />
           </div>
-
         </div>
-        <button onClick={() => {
-          console.log(messages);
-        }} style={{ marginTop: "16px" }}>debug</button>
+        
       </div>
     )
   else return (

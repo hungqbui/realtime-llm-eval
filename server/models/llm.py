@@ -12,11 +12,11 @@ except Exception as e:
     print(f"Error loading LLM model: {e}")
     llm = None
 
-async def llm_answer(question, socket, sid, history=None, context=None):
+def llm_answer(question, history=None, context=None):
 
     prompt = [{
         "role": "system" if h.get("type") == "AI" else "user",
-        "content": h.get("text") 
+        "content": h.get("content") 
     } for h in history] if history else []
 
     prompt.append({
@@ -27,11 +27,11 @@ async def llm_answer(question, socket, sid, history=None, context=None):
     messages=[
             {
                 "role": "system",
-                "content": "You are a helpful assistant that answers questions of a conversation base on the context of the transcription.",
+                "content": "You are a helpful medical assistant for doctors by answering questions in the context of a conversation between the doctor with their patient based on the context of the given transcription.",
             },
             {
                 "role": "user",
-                "content": f"This is the conversation: {context}" if context else "No context provided.",
+                "content": f"This is the conversation up-to this point: {context}" if context else "No transcription has been made.",
             },
             {
                 "role": "system",
@@ -45,12 +45,5 @@ async def llm_answer(question, socket, sid, history=None, context=None):
         stream=True
     )
 
-    for chunk in out:
-        if "choices" not in chunk or not chunk["choices"]:
-            continue
-        if "delta" not in chunk["choices"][0] or "content" not in chunk["choices"][0]["delta"]:
-            continue
+    return out
         
-        await socket.emit("chat_response", {"message": chunk["choices"][0]["delta"]["content"]}, to=sid)
-
-    await socket.emit("stream_end", {}, to=sid)

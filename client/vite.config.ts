@@ -8,12 +8,12 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       '/.proxy/api': {
-        target: 'http://localhost:5001',
+        target: 'http://localhost:5000',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/.proxy/, ''),
       },
       '/socket.io': {
-        target: 'ws://localhost:5001',
+        target: 'ws://localhost:5000',
         changeOrigin: true,
         ws: true,
       },

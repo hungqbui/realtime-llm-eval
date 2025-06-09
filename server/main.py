@@ -32,7 +32,7 @@ CHUNK_SIZE        = int(SAMPLE_RATE * MIN_CHUNK_SIZE)
 
 transcribe_queue = defaultdict(asyncio.Queue)
 user_tasks = defaultdict(asyncio.Task)
-
+stop_event_list = defaultdict(asyncio.Event)
 
 # diarize_queue = defaultdict(asyncio.Queue)
 # diarizer = None
@@ -57,8 +57,12 @@ async def face_recognition(sid, data):
     try:
         loop = asyncio.get_event_loop()
         image = Image.open(io.BytesIO(data["image_data"]))
-        ans = await loop.run_in_executor(executor, predict, image)
-        await sio.emit("face_recognition_ans", {"message": ans}, to=sid)
+        ans, prob = await loop.run_in_executor(executor, predict, image)
+
+        if prob < 0.5:
+            return
+
+        await sio.emit("face_recognition_ans", {"message": ans, "conf": prob}, to=sid)
     except Exception as e:
         print(f"Error processing image: {e}")
         await sio.emit("error", {"message": "Error processing image"}, to=sid)
@@ -220,11 +224,35 @@ async def handle_chat_message(sid, data):
 
     loop = asyncio.get_event_loop()
 
-    def syncWrapper(*args, **kwargs):
-        return asyncio.new_event_loop().run_until_complete(llm_answer(*args, **kwargs))
+    out = await loop.run_in_executor(executor, llm_answer, data['message'], data.get('history', None), data.get('transcription', None))
 
-    await loop.run_in_executor(executor, syncWrapper, data['message'], sio, sid, data.get('history', None), data.get('transcription', None))
+    stop_event_list[sid] = asyncio.Event()
 
+    async def _stream_llm(sid, out, stop_event):
+        for chunk in out:
+            if stop_event.is_set():
+                print(f"Stream for SID {sid} cancelled by client request.")
+                await sio.emit("stream_end", {"message": "BREAK"}, to=sid)
+                return  # Exit the loop if the stop event is set
+            
+            if "choices" not in chunk or not chunk["choices"]:
+                continue
+            if "delta" not in chunk["choices"][0] or "content" not in chunk["choices"][0]["delta"]:
+                continue
+            
+            await sio.emit("chat_response", {"message": chunk["choices"][0]["delta"]["content"]}, to=sid)
+
+        await sio.emit("stream_end", {"message": "END"}, to=sid)
+
+    sio.start_background_task(_stream_llm, sid, out, stop_event_list[sid])
+
+@sio.on("stop_chat")
+async def handle_stop_chat(sid):
+    print(f"Stopping chat stream for {sid}")
+
+    if sid in stop_event_list:
+        stop_event_list[sid].set()
+        del stop_event_list[sid]
 
 if __name__ == "__main__":
 

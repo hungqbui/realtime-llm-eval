@@ -44,6 +44,7 @@ const EmotionWheel = (props: any) => {
             };
 
             container.addEventListener('wheel', handleWheelScroll, { passive: false });
+            
 
             return () => {
                 container.removeEventListener('wheel', handleWheelScroll);
@@ -53,6 +54,16 @@ const EmotionWheel = (props: any) => {
             };
         }
     }, []); // Empty dependency array: effect runs once on mount, cleans up on unmount
+
+    useEffect(() => {
+
+        const container = scrollContainerRef.current;
+        if (container) {
+            // Scroll to the end of the container when emotions change
+            container.scrollLeft = container.scrollWidth - container.clientWidth;
+        }
+
+    }, [props.emotions]);
 
     return (
         <div
@@ -66,6 +77,7 @@ const EmotionWheel = (props: any) => {
                         key={index}
                         time={item.time}
                         emotion={item.emotion}
+                        conf={item.conf.toFixed(2)}
                     />
                 ))}
             </div>
