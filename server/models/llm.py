@@ -50,8 +50,8 @@ def llm_answer(question, history=None, context=None):
 
     formatted_history = [
 
-        HumanMessage(content=h.content) if h.get("type") == "User" else
-        AIMessage(content=h.content)
+        HumanMessage(content=h["text"]) if h.get("type") == "User" else
+        AIMessage(content=h["text"])
 
         for h in history
     ] if history else []
