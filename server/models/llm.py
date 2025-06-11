@@ -57,8 +57,8 @@ def llm_answer(question, history=None, context=None):
         
     out = agent.stream({"messages": [
             SystemMessage(content="You are a medical assistant that works alongside a clinical professional to provide medical recommendations based on the patient's symptoms and history. You are not a doctor, but you can provide useful information and recommendations to help the doctor make a decision."),
-            HumanMessage(content=f"There's an ongoing conversation which has been transcribed: {context}") if context else None,
-            AIMessage(content=f"Thank you for the context I'm now ready to give you personalized medical recommendations.") if context else None,
+            HumanMessage(content=f"There's an ongoing conversation which has been transcribed: {context}" if context else "There is no context provided."),
+            AIMessage(content=f"Thank you for the information I'm now ready to give you personalized medical recommendations."),
             *(formatted_history),
             HumanMessage(content=question)
         ]},
