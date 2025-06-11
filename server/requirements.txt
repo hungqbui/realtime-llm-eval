@@ -9,3 +9,5 @@ torchvision
 transformers
 whisperlivekit
 llama_cpp_python
+langchain-community
+langgraph

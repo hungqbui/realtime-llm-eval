@@ -7,6 +7,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 processor = AutoImageProcessor.from_pretrained("mo-thecreator/vit-Facial-Expression-Recognition", use_fast=True)
 model = ViTForImageClassification.from_pretrained("mo-thecreator/vit-Facial-Expression-Recognition")
 
+# Return a classification result for a given image from the webcam image
 def predict(image):
     try:
         inputs = processor(images=image, return_tensors="pt")
