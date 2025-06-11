@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 from langchain_core.tools import Tool, tool
 from langgraph.prebuilt import create_react_agent, ToolNode
 from langchain_community.chat_models import ChatLlamaCpp
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_core.output_parsers import PydanticToolsParser
 load_dotenv("../../.env")
 
@@ -47,17 +47,19 @@ def llm_answer(question, history=None, context=None):
         Generator: A generator that yields messages from the LLM.
     """
 
-
     formatted_history = [
 
-        HumanMessage(content=h["text"]) if h.get("type") == "User" else
-        AIMessage(content=h["text"])
+        HumanMessage(content=h["content"]) if h.get("type") == "User" else
+        AIMessage(content=h["content"])
 
         for h in history
     ] if history else []
         
     out = agent.stream({"messages": [
-            *(history),
+            SystemMessage(content="You are a medical assistant that works alongside a clinical professional to provide medical recommendations based on the patient's symptoms and history. You are not a doctor, but you can provide useful information and recommendations to help the doctor make a decision."),
+            HumanMessage(content=f"There's an ongoing conversation which has been transcribed: {context}") if context else None,
+            AIMessage(content=f"Thank you for the context I'm now ready to give you personalized medical recommendations.") if context else None,
+            *(formatted_history),
             HumanMessage(content=question)
         ]},
         stream_mode="messages" # For token level streaming (not possible without custom _stream method in LlamaCpp class)
