@@ -94,6 +94,11 @@ function App() {
     return `${date.getHours()}:${padDigit(date.getMinutes())}`;
   }
 
+  const getCurrentTimeSeconds = () => {
+    const date = new Date();
+    return `${date.getHours()}:${padDigit(date.getMinutes())}:${padDigit(date.getSeconds())}`;
+  }
+
   const padDigit = (num: number) => {
     if (num < 10) {
       return `0${num}`;
@@ -153,8 +158,19 @@ function App() {
     })
 
     socket.on("face_recognition_ans", (data : any) => {
-      console.log(data)
-      setEmotions(prev => [...prev, {time: getCurrentTime(), emotion: data["message"], conf: data["conf"]}]);
+      console.log(data["message"]);
+
+      const newItem = {
+        time: getCurrentTimeSeconds(),
+        emotions: data["message"].map((em: any) => {
+          return {
+            name: em[1],
+            score: em[0]
+          }
+        })
+      }
+
+      setEmotions(prev => [newItem, ...prev]);
     });
 
     return () => {
@@ -191,9 +207,9 @@ function App() {
           "image_data": buf,
         });
 
-      }, 'image/jpeg', 0.95);
+      }, 'image/jpeg', 1);
 
-    }, 10000);
+    }, 15000);
 
     return () => {
       clearInterval(frameInterval);
@@ -268,7 +284,7 @@ function App() {
     setMessages([...messages, {type: "User", content: message, time: getCurrentTime()}]);
     socket.emit("chat_message", { message, title, transcription: transcription.map((obj) => {
       return `${obj.time} ${obj.text}`;
-    }).join("\n"), history: messages.slice(-10) });
+    }).join("\n"), history: messages.slice(-10), "emotions": emotions.slice(-30) });
     setMessage("");
     setWaitingForResponse(true);
   }
@@ -281,29 +297,32 @@ function App() {
           <button onClick={async () => {
             if (!isRecording) startRecording();
             else stopRecording();
-          }} style={{ backgroundColor: isRecording ? "red" : "green" }}>
+          }} style={{ backgroundColor: isRecording ? "red" : "lime", color: "black" }}>
             { isRecording ? "Stop" : "Start" }
           </button>
         </div>
-        <video style={{ border: "1px solid black", maxWidth:"40%" }}
-          ref={vidRef}
-          muted
-          autoPlay
-          playsInline
-          height="40%"
-        ></video>
-        <EmotionWheel emotions={emotions} />
+        <div style={{ position: "relative", display: "flex", justifyContent: "center", width: "100%", height: "30vh" }}>
+          <video style={{ border: "1px solid black", maxWidth:"400px", height: "100%" }}
+            ref={vidRef}
+            muted
+            autoPlay
+            playsInline
+          ></video>
+          <div style={{ position: "absolute", right: "3%", maxHeight: "100%", minWidth: "250px", width: "30vw" }}>
+            <EmotionWheel emotions={emotions} />
+          </div>
+        </div>
         <div style={{ marginTop: "16px", width: "100%", textAlign: "center", display: "flex", flexDirection: "row", justifyContent: "space-evenly" }}>
 
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: `${leftWidth}%` }}>
-            <p>Chatbox</p>
+            <h3>Chatbox</h3>
             <ChatBox messages={messages} temp={fullText} temptime={fullTextTimeRef.current} />
             <div style={{width: "100%", position: "relative", display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "space-between"}}>
               <textarea rows={1} placeholder='Ask MedGemma...' className='input-text' onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   textMessageHandler(e);
                 }
-              }} value={message} onChange={(e) => setMessage(e.target.value)} />
+              }} value={message} onChange={(e) => setMessage(e.target.value == "\n" ? "" : e.target.value)} />
               <button onClick={e => {
                 if (waitingForResponse) {
                   stopHandler(e);
@@ -327,7 +346,7 @@ function App() {
             <div className="resize-handle"></div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", textAlign: "left", width: `${100 - leftWidth}%`, margin: 0 }}>
-            <p style={{width: "100%", textAlign: "center"}}>Transcription</p>
+            <h3 style={{width: "100%", textAlign: "center"}}>Transcription</h3>
             <TranscriptionBox messages={transcription} />
           </div>
         </div>

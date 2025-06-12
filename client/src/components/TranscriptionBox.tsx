@@ -7,7 +7,7 @@ const TranscriptionBox = (props: any) => {
 
     return (
 
-        <div>
+        <div style={{ width: "100%", height: "100%"}} className='transcription-box-container'>
             <div className="timeline-messages-container"> 
                 {props.messages.map((msg : any, index : number) => (
                     <TimeBlock key={index} message={msg} isLast={index === props.messages.length -1}/>

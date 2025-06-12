@@ -12,9 +12,14 @@
   overflow-wrap: break-word;    /* modern name */
   word-break: break-word;
   outline: none;
-  border-top-left-radius: 20px;
-  border-top-right-radius: 20px;
   padding-top: 1rem;
+  box-shadow: 
+    inset 0px 11px 8px -10px #000000,
+    inset 0px 0px 0px 0px #000000;
+}
+
+.message {
+  animation: fadeInUp 0.5s ease-out forwards;
 }
 
 .message-header {
@@ -39,4 +44,37 @@
   padding: 0.1rem 1.2rem;
   border-radius: 20px;
   width: fit-content;
+}
+
+@media (prefers-color-scheme: light) {
+  .chat-container {
+    background: #f0f0f0;
+    box-shadow: 
+    inset 0px 11px 8px -10px #CCC,
+    inset 0px 0px 0px 0px #CCC;
+  }
+
+  .message-header {
+    color: #555;
+  }
+
+  .user {
+    background-color: rgb(200, 230, 255);
+    color: rgb(0, 0, 0);
+  }
+
+  .ai {
+    background-color: rgb(50, 50, 50);
+    color: rgb(255, 255, 255);
+  }
+}
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

@@ -11,3 +11,6 @@ whisperlivekit
 llama_cpp_python
 langchain-community
 langgraph
+deepface
+tf-keras
+mediapipe

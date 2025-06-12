@@ -60,13 +60,17 @@ async def face_recognition(sid, data):
     try:
         # Get the image data from the received data and run the prediction in a separate thread to avoid blocking the event loop.
         loop = asyncio.get_event_loop()
-        image = Image.open(io.BytesIO(data["image_data"]))
-        ans, prob = await loop.run_in_executor(executor, predict, image)
 
-        if prob < 0.5:
+        top = await loop.run_in_executor(executor, predict, Image.open(io.BytesIO(data["image_data"])))
+
+        # top = [(0.95, 'happy'), (0.03, 'sad'), (0.01, 'angry')]
+
+        if top == "NONE":
             return
 
-        await sio.emit("face_recognition_ans", {"message": ans, "conf": prob}, to=sid)
+        await sio.emit("face_recognition_ans", {
+            "message": top
+        }, to=sid)
     except Exception as e:
         print(f"Error processing image: {e}")
         await sio.emit("error", {"message": "Error processing image"}, to=sid)
@@ -226,7 +230,7 @@ async def handle_chat_message(sid, data):
 
     loop = asyncio.get_event_loop()
 
-    out = await loop.run_in_executor(executor, llm_answer, data['message'], data.get('history', None), data.get('transcription', None))
+    out = await loop.run_in_executor(executor, llm_answer, data['message'], data.get('history', None), data.get('transcription', None), data.get("emotions", None))
 
     # Conditional var to handle stopping the stream based on client request.
     stop_event_list[sid] = asyncio.Event()
@@ -259,5 +263,4 @@ async def handle_stop_chat(sid):
         del stop_event_list[sid]
 
 if __name__ == "__main__":
-
-    uvicorn.run(app, host="0.0.0.0", port=5000)
+    uvicorn.run(app, host="0.0.0.0", port=5001)

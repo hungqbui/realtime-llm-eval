@@ -1,13 +1,22 @@
+.transcription-box-container {
+    box-shadow: 
+        inset 0px 11px 8px -10px #000000,
+        inset 0px 0px 0px 0px #000000;
+}
+
+
 .timeline-messages-container {
-    overflow-y: auto;
-    height: 40vh;
+    position: relative;
     width: 100%;
+    height: 100%;
+    overflow-y: auto;
 }
 
 .message-item {
     display: flex;
     align-items: flex-start;
     margin:2rem 1rem;
+    animation: fadeInUp 0.5s ease-out forwards;
 }
 .message-item__timestamp {
     font-size: 0.75rem;
@@ -56,6 +65,22 @@
     font-size: 0.875rem;
     word-wrap: break-word;
 }
-.timeline-messages-container {
-    position: relative;
+
+@media (prefers-color-scheme: light) {
+  .transcription-box-container {
+    box-shadow: 
+    inset 0px 11px 8px -10px #CCC,
+    inset 0px 0px 0px 0px #CCC;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
