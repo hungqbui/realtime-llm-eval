@@ -55,7 +55,7 @@ def llm_answer(question, history=None, context=None, emotions=None):
     for emotion in emotions:
         emotion_context += f"At time {emotion['time']} combination of:\n"
         for e in emotion["emotions"]:
-            emotion_context += f" {e['emotion']} with probability {e['probability']:.2f}.\n"
+            emotion_context += f" {e} with probability {e['probability']:.2f}.\n"
 
     emotion_context += "Combine this information with the timeline of the transcription to add details about possible underlying problems with the patient report.\n"
 
