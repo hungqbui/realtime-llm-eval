@@ -158,7 +158,6 @@ function App() {
     })
 
     socket.on("face_recognition_ans", (data : any) => {
-      console.log(data["message"]);
 
       const newItem = {
         time: getCurrentTimeSeconds(),
