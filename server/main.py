@@ -34,7 +34,7 @@ executor = ThreadPoolExecutor(max_workers=len(GPU_IDS) * 2)
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
 
 SAMPLE_RATE       = 16_000
-MIN_CHUNK_SIZE    = 3               # seconds
+MIN_CHUNK_SIZE    = 5               # seconds
 CHUNK_SIZE        = int(SAMPLE_RATE * MIN_CHUNK_SIZE)
 
 # Transcribe queue holds audio data for each user session, allowing for asynchronous processing of audio streams.
@@ -202,7 +202,6 @@ async def model_run(buffer, prompt=None):
     try:
         segments, info = model.transcribe(
             np.concatenate(buffer).astype(np.float32),
-            language="en",
             beam_size=5,
             vad_filter=True,
             condition_on_previous_text=True,
