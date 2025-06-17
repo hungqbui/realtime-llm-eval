@@ -2,7 +2,7 @@ import requests
 import dotenv
 import os
 
-dotenv.load_dotenv("../../.env")
+dotenv.load_dotenv("/data/qbui2/proj/dev/realtime-llm-eval/.env")
 
 URL = "https://redcap.times.uh.edu/api/"
 

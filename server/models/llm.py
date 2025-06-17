@@ -5,7 +5,9 @@ from langchain_community.chat_models import ChatLlamaCpp
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_core.output_parsers import PydanticToolsParser
 from langchain_google_genai import ChatGoogleGenerativeAI
-load_dotenv("../../.env")
+import os
+
+load_dotenv("/data/qbui2/proj/dev/realtime-llm-eval/.env")
 
 from langchain_community.utilities import GoogleSerperAPIWrapper
 

@@ -17,6 +17,7 @@ import io
 from concurrent.futures import ThreadPoolExecutor
 from langchain_core.messages import AIMessageChunk
 import os
+from models.whisper_streaming.whisper_online import *
 
 # Get all available GPU for parallel processing.
 import torch
@@ -27,11 +28,20 @@ GPU_IDS = list(range(torch.cuda.device_count()))
 app = Quart(__name__)
 app = cors(app, allow_origin="*")
 
+import argparse
+
+parser = argparse.ArgumentParser(description="Run the real-time ASR server.")
+parser.add_argument("--modelsize", type=str, default="small", help="Size of the Whisper model to use (e.g., 'tiny', 'base', 'small', 'medium', 'large').")
+
+model = parser.parse_args().modelsize
+
+asr = FasterWhisperASR(lan="auto",modelsize=model)
+
 # ThreadPoolExecutor is used to run blocking code in a separate thread, allowing the main event loop to remain responsive.
 executor = ThreadPoolExecutor(max_workers=len(GPU_IDS) * 2)
 
 # Socket.IO server is initialized with ASGI mode, allowing it to work with the Quart app.
-sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
+sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*", ping_timeout=180000, ping_interval=60000)
 
 SAMPLE_RATE       = 16_000
 MIN_CHUNK_SIZE    = 5               # seconds
@@ -42,6 +52,7 @@ transcribe_queue = defaultdict(asyncio.Queue)
 session_name = defaultdict(str)
 user_tasks = defaultdict(asyncio.Task)
 stop_event_list = defaultdict(asyncio.Event)
+online_map = defaultdict(OnlineASRProcessor)
 
 @app.route('/api/get_folders', methods=['GET'])
 async def get_folders():
@@ -130,11 +141,12 @@ app = socketio.ASGIApp(sio, app)
 
 @sio.event
 def connect(sid, environ):
+    online_map[sid] = VACOnlineASRProcessor(MIN_CHUNK_SIZE/16000, asr=asr)
     print("Client connected")
 
 @sio.event
-def disconnect(sid):
-    print("Client disconnected")
+def disconnect(sid, reason):
+    print(f"Client disconnected {reason}")
 
 # Face recognition socket event handler
 @sio.on("face_recognition")
@@ -172,104 +184,31 @@ async def handle_audio(sid, data):
         print(f"Error processing audio: {e}")
         await sio.emit("error", {"message": "Error processing audio"})
 
-# Load the Whisper model based on the provided command line arguments (to ease deployment and testing on different platform).
-import argparse
-
-parser = argparse.ArgumentParser()
-parser.add_argument("--model", required=True)
-parser.add_argument("--cuda", action="store_true", help="Use CUDA for GPU acceleration")
-args = parser.parse_args()
-
-useCuda = args.cuda
-model_str = args.model
-
-# Load the faster-whisper model with the specified parameters.
-try:
-    # Models that have been tested: distil-small.en, distil-medium.en, large-v2 (distil-small.en seems to be the most balanced)
-    model = WhisperModel(model_str, device="auto" if not useCuda else "cuda", compute_type="float16", device_index=GPU_IDS if useCuda else None)
-except Exception as e:
-    print(f"Error loading Whisper model: {e}")
-    sys.exit(1)
-
 # Video handler that saves incoming video data to a file.
 @sio.on("video")
 async def handle_video(sid, data):
     with open(f"videos/video_{sid}.webm", 'ab') as f:
         f.write(data["video_data"])
 
-# Coroutine to run the Whisper model for transcription.
-async def model_run(buffer, prompt=None):
-    try:
-        segments, info = model.transcribe(
-            np.concatenate(buffer).astype(np.float32),
-            beam_size=5,
-            vad_filter=True,
-            condition_on_previous_text=False,
-            word_timestamps=True,
-        )
-    except Exception as e:
-        print(f"Error during model run: {e}")
-        return [], {}
-    return segments, info
-
 # Asynchronous consummer that processes audio data from the transcribe queue, performs transcription, and emits the results back to the client.
 async def transcribe(sid):
-    from collections import deque
     done = False
-    last_word = 0
-    window_num = 0
 
-    # A rolling buffer to hold the audio data for transcription.
-    buffer = deque(maxlen=CHUNK_SIZE) 
     while not done:
         pcm = await transcribe_queue[sid].get()
-        buffer.append(pcm)
-
+        online_map[sid].insert_audio_chunk(pcm)
         if pcm is None:
             done = True
+            print(online_map[sid].finish())
             break
-
-        if len(buffer) * 4096 <= CHUNK_SIZE and not done:
-            transcribe_queue[sid].task_done()
-            continue
-
-
-        before = time.perf_counter()
-
-        try:
-            segments, _ = await model_run(buffer)
-        except Exception as e:
-            print(f"Error during transcription: {e}")
-            await sio.emit("error", {"message": "Error during transcription"}, to=sid)
-        cur = []
-
-        for seg in segments:
-            for word in seg.words:
-                adjusted_start = word.start + window_num
-                adjusted_end = word.end + window_num
-
-                if adjusted_start < last_word or word.probability < 0.5:
-                    continue
-
-                cur.append(word.word)
-                last_word = adjusted_end
         
-        # Chunking algorithm to ensure that the buffer is processed in manageable chunks and doesn't lose context using overlapping chunks.
-        buffer.popleft()
-        buffer.popleft()
-
-        window_num += (4096 / SAMPLE_RATE) * 2 
-        if not cur:
-            transcribe_queue[sid].task_done()
-            continue
-
-        await sio.emit("audio_ans", {"text": " ".join(cur)}, to=sid)
+        loop = asyncio.get_event_loop()
+        ans = await loop.run_in_executor(executor, online_map[sid].process_iter)
+        if ans[2]:
+            await sio.emit("audio_ans", {"text": ans[2]}, to=sid)
 
         transcribe_queue[sid].task_done()
-        after= time.perf_counter()
 
-        # Logging performance metrics for transcription.
-        print(f"Transcription time: {after - before}, {sid}")
 
 # Socket.IO event handler to start the transcription process for a user session.
 @sio.on("start")
@@ -357,4 +296,4 @@ async def handle_stop_chat(sid):
         del stop_event_list[sid]
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=5000)
+    uvicorn.run(app, host="0.0.0.0", port=5001)

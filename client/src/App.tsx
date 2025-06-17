@@ -118,8 +118,8 @@ function App() {
       console.log("Connected to server");
     });
 
-    socket.on("disconnect", () => {
-      console.log("Disconnected from server");
+    socket.on("disconnect", (reason) => {
+      console.log("Disconnected from server" + reason);
     });
 
     socket.on("audio_ans", (data : any) => {
@@ -238,7 +238,7 @@ function App() {
     return () => {
       clearInterval(frameInterval);
     };
-  }, [isRecording]);
+  }, [isRecording, titleSet]);
 
   const startRecording = async () => {
 
@@ -396,9 +396,7 @@ function App() {
               <li key={folder.id}>{folder.name} <button onClick={() => {
                 setTitle(folder.name);
                 setTitleSet(true);
-              }}>Continue</button><button onClick={() => {
-                window.location.href = `/data/${folder.name}`;
-              }}>View Data</button></li>
+              }}>Continue</button></li>
             )) : <li>No sessions available</li> }
           </ul>
           <h3>Or create a new session</h3>
