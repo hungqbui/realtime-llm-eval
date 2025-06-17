@@ -186,7 +186,7 @@ model_str = args.model
 # Load the faster-whisper model with the specified parameters.
 try:
     # Models that have been tested: distil-small.en, distil-medium.en, large-v2 (distil-small.en seems to be the most balanced)
-    model = WhisperModel(model_str, device="auto" if not useCuda else "cuda", compute_type="int8", device_index=GPU_IDS if useCuda else None)
+    model = WhisperModel(model_str, device="auto" if not useCuda else "cuda", compute_type="float16", device_index=GPU_IDS if useCuda else None)
 except Exception as e:
     print(f"Error loading Whisper model: {e}")
     sys.exit(1)
@@ -204,7 +204,7 @@ async def model_run(buffer, prompt=None):
             np.concatenate(buffer).astype(np.float32),
             beam_size=5,
             vad_filter=True,
-            condition_on_previous_text=True,
+            condition_on_previous_text=False,
             word_timestamps=True,
         )
     except Exception as e:
@@ -218,8 +218,6 @@ async def transcribe(sid):
     done = False
     last_word = 0
     window_num = 0
-
-    prompt = []
 
     # A rolling buffer to hold the audio data for transcription.
     buffer = deque(maxlen=CHUNK_SIZE) 
@@ -250,10 +248,10 @@ async def transcribe(sid):
                 adjusted_start = word.start + window_num
                 adjusted_end = word.end + window_num
 
-                if adjusted_start < last_word or word.probability < 0.7:
+                if adjusted_start < last_word or word.probability < 0.5:
                     continue
 
-                cur.append(re.sub(r'[^A-Za-z]+', '', word.word))
+                cur.append(word.word)
                 last_word = adjusted_end
         
         # Chunking algorithm to ensure that the buffer is processed in manageable chunks and doesn't lose context using overlapping chunks.

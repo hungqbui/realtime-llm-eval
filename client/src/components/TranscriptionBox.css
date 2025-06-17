@@ -1,9 +1,9 @@
 .transcription-box-container {
-    box-shadow: 
-        inset 0px 11px 8px -10px #000000,
-        inset 0px 0px 0px 0px #000000;
+  height: 40vh;
+  box-shadow: 
+      inset 0px 11px 8px -10px #000000,
+      inset 0px 0px 0px 0px #000000;
 }
-
 
 .timeline-messages-container {
     position: relative;
