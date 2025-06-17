@@ -76,7 +76,10 @@ def llm_answer(question, history=None, context=None, emotions=None):
             *(formatted_history),
             HumanMessage(content=question)
         ]},
-        stream_mode="messages" # For token level streaming (not possible without custom _stream method in LlamaCpp class)
+        stream_mode="messages", # For token level streaming (not possible without custom _stream method in LlamaCpp class)
+        config={
+            "recursion_limit": 5,
+        }
     )
 
     return out

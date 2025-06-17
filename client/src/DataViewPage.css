@@ -1,0 +1,4 @@
+.video-title-list:hover {
+    cursor: pointer;
+    text-decoration: underline;
+}

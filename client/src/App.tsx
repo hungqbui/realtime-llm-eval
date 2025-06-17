@@ -5,7 +5,7 @@ import './App.css'
 import ChatBox from './components/ChatBox';
 import TranscriptionBox from './components/TranscriptionBox';
 import EmotionWheel from './components/EmotionWheel';
-
+import fetchTool from './utils/fetchData';
 
 function App() {
 
@@ -19,6 +19,8 @@ function App() {
   const [waitingForResponse, setWaitingForResponse] = useState<boolean>(false);
   const [fullText, setFullText] = useState<string>("");
   const [leftWidth, setLeftWidth] = useState<number>(50);
+  const [folders, setFolders] = useState<any[]>([]);
+
 
   const audioCtx = useRef<AudioContext | null>(null);
   const processor = useRef<ScriptProcessorNode | null>(null);
@@ -108,6 +110,10 @@ function App() {
 
   useEffect(() => {
 
+    fetchTool.fetchPatients().then((data) => {
+      setFolders(data)
+    })
+
     socket.on("connect", () => {
       console.log("Connected to server");
     });
@@ -172,6 +178,8 @@ function App() {
       setEmotions(prev => [newItem, ...prev]);
     });
 
+  
+
     return () => {
       socket.off("connect");
       socket.off("disconnect");
@@ -182,6 +190,23 @@ function App() {
     }
 
   }, []);
+
+  useEffect(() => {
+    if (!titleSet) return;
+
+    socket.emit("session_name", { session_name: title });
+
+    // Reset states when title is set
+    setTranscription([]);
+    setMessages([]);
+    setFullText("");
+    fullTextRef.current = "";
+    fullTextTimeRef.current = "";
+    timeRef.current = "";
+    setEmotions([]);
+    setWaitingForResponse(false);
+    setMessage("");
+  }, [titleSet])
 
   useEffect(() => {
     if (!isRecording) return;
@@ -291,6 +316,16 @@ function App() {
   if (titleSet)
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", width: "100vw" }}>
+        <button onClick={() => setTitleSet(false)} style={{
+          position: "absolute",
+          top: "30px",
+          left: "30px",
+          padding: "8px 16px",
+          backgroundColor: "#2323ff",
+          border: "1px solid #ccc",
+          borderRadius: "4px",
+          cursor: "pointer"
+        }}>Back</button>
         <canvas ref={canvasRef} style={{display: "none"}}></canvas>
         <div >
           <button onClick={async () => {
@@ -354,8 +389,42 @@ function App() {
     )
   else return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", width: "100vw" }}>
-      <input style={{ marginBottom: "16px", padding: "8px", fontSize: "16px", width: "80%" }} type="text" value={title} onChange={(e) => setTitle(e.target.value)} />
-      <button onClick={() => setTitleSet(true)}>Set Title</button>
+        <div>
+          <h2>Choose a session to continue</h2>
+          <ul>
+            { folders.length != 0 ? folders.map(folder => (
+              <li key={folder.id}>{folder.name} <button onClick={() => {
+                setTitle(folder.name);
+                setTitleSet(true);
+              }}>Continue</button><button onClick={() => {
+                window.location.href = `/data/${folder.name}`;
+              }}>View Data</button></li>
+            )) : <li>No sessions available</li> }
+          </ul>
+          <h3>Or create a new session</h3>
+          <input type="text" placeholder='Create new session' value={title} onChange={(e) => setTitle(e.target.value)} />
+          <button onClick={async () => {
+            if (title.trim() === "") {
+              alert("Please enter a session title");
+              return;
+            }
+            if (title.includes(" ")) {
+              alert("Session title cannot contain spaces. Please choose a different name.");
+              return;
+            }
+
+            const folderNames = folders.map(folder => folder.name.toLowerCase());
+            if (folderNames.includes(title.toLowerCase())) {
+              alert("Session with this name already exists. Please choose a different name.");
+              return;
+            }
+            await fetchTool.createPatient(title);
+            // Update the ui
+            const newFolders = await fetchTool.fetchPatients();
+            setFolders(newFolders);
+            setTitleSet(true);
+          }}>Create</button>
+        </div>
     </div>
   )
 }

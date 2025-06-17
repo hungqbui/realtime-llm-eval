@@ -1,5 +1,5 @@
 import PIL.Image
-from quart import Quart, session, request, jsonify
+from quart import Quart, session, request, jsonify, Response
 import socketio
 from quart_cors import cors
 import numpy as np
@@ -16,6 +16,7 @@ from models.facial import predict
 import io
 from concurrent.futures import ThreadPoolExecutor
 from langchain_core.messages import AIMessageChunk
+import os
 
 # Get all available GPU for parallel processing.
 import torch
@@ -38,8 +39,91 @@ CHUNK_SIZE        = int(SAMPLE_RATE * MIN_CHUNK_SIZE)
 
 # Transcribe queue holds audio data for each user session, allowing for asynchronous processing of audio streams.
 transcribe_queue = defaultdict(asyncio.Queue)
+session_name = defaultdict(str)
 user_tasks = defaultdict(asyncio.Task)
 stop_event_list = defaultdict(asyncio.Event)
+
+@app.route('/api/get_folders', methods=['GET'])
+async def get_folders():
+    """
+    Endpoint to get the list of folders in the REDCap file repository.
+    """
+    from utils.redcap import list_folders
+    try:
+        folders = await asyncio.to_thread(list_folders)
+        return jsonify(folders)
+    except Exception as e:
+        print(f"Error getting folders: {e}")
+        return jsonify({"error": "Failed to retrieve folders"}), 500
+
+@app.route("/api/get_data/<patient_name>", methods=["GET"])
+async def get_data(patient_name):
+    """
+    Endpoint to get the data for a specific patient from the REDCap file repository.
+    """
+    from utils.redcap import list_folders, get_id_from_name
+    try:
+        folder_id = get_id_from_name(patient_name)
+        files = list_folders(folder_id=folder_id)
+
+        filenames = []
+        for x in files:
+            if "doc_id" in x and x["name"][-5:] == ".webm":
+                filenames.append(x)
+
+        return jsonify(filenames)
+    except Exception as e:
+        print(f"Error getting data for {patient_name}: {e}")
+        return jsonify({"error": "Failed to retrieve data"}), 500
+
+@app.route("/api/get_file/<doc_id>", methods=["GET"])
+async def get_file_route(doc_id):
+    from utils.redcap import get_file
+    content = get_file(doc_id)
+    return Response(content, mimetype="video/webm")
+
+@app.route("/api/delete_document/<doc_id>", methods=["DELETE"])
+async def delete_document(doc_id):
+    """
+    Endpoint to delete a document from the REDCap file repository.
+    """
+    from utils.redcap import delete_document
+    try:
+        delete_document(doc_id)
+        return jsonify({"message": "Document deleted successfully"}), 200
+    except Exception as e:
+        print(f"Error deleting document {doc_id}: {e}")
+        return jsonify({"error": "Failed to delete document"}), 500
+
+@app.route("/api/delete_data/<patient_name>", methods=["DELETE"])
+async def delete_data(patient_name):
+    """
+    Endpoint to delete all data for a specific patient from the REDCap file repository.
+    """
+    from utils.redcap import delete_data
+    try:
+        delete_data(patient_name)
+        return jsonify({"message": "Data deleted successfully"}), 200
+    except Exception as e:
+        print(f"Error deleting data for {patient_name}: {e}")
+        return jsonify({"error": "Failed to delete data"}), 500
+
+@app.route("/api/create_patient", methods=["POST"])
+async def create_patient():
+    """
+    Endpoint to create a new patient folder in the REDCap file repository.
+    The patient name is provided in the request body.
+    """
+    from utils.redcap import create_folder
+    data = await request.get_json()
+    patient_name = data.get("patientName", "Unnamed Patient")
+
+    try:
+        folder_id = create_folder(patient_name)
+        return jsonify({"folder_id": folder_id, "message": "Patient folder created successfully"}), 201
+    except Exception as e:
+        print(f"Error creating patient folder: {e}")
+        return jsonify({"error": "Failed to create patient folder"}), 500
 
 # Bind the Socket.IO server to the Quart app.
 app = socketio.ASGIApp(sio, app)
@@ -182,9 +266,6 @@ async def transcribe(sid):
             transcribe_queue[sid].task_done()
             continue
 
-        prompt += cur
-        prompt = prompt[-10:]  # Keep the last 10 words as context
-
         await sio.emit("audio_ans", {"text": " ".join(cur)}, to=sid)
 
         transcribe_queue[sid].task_done()
@@ -192,8 +273,6 @@ async def transcribe(sid):
 
         # Logging performance metrics for transcription.
         print(f"Transcription time: {after - before}, {sid}")
-        with open(f"log_{model_str}.csv", "a") as f:
-            f.write(f"{after - before},{' '.join(cur)}\n")
 
 # Socket.IO event handler to start the transcription process for a user session.
 @sio.on("start")
@@ -207,16 +286,34 @@ async def start_up(sid):
 
     user_tasks[sid] = sio.start_background_task(transcribe, sid)
 
+@sio.on("session_name")
+async def handle_session_name(sid, data):
+    """
+    Socket.IO event handler to set the session name for a user session.
+    This is used to identify the session for transcription and other operations.
+    """
+    global session_name
+
+    # Store the session name in the global dictionary.
+    session_name[sid] = data.get("session_name", "unnamed_session")
+    print(data)
+    print(f"Session name for {sid} set to {session_name[sid]}")
+
+    await sio.emit("session_name_set", {"session_name": session_name[sid]}, to=sid)
+
 # Socket.IO event handler to stop the transcription process for a user session.
 @sio.on("stop")
 async def handle_stop(sid):
     global transcribe_queue, user_tasks
 
+    print("stopping")
+    from utils.redcap import upload_file
+    upload_file(f"{os.getcwd()}/videos/video_{sid}.webm", session_name[sid])
     # Cancel the transcription task for the user session if it is running.
     if user_tasks.get(sid):
         if user_tasks[sid] and not user_tasks[sid].done():
+            transcribe_queue[sid].put_nowait(None)  # Signal the transcription task to stop
             user_tasks[sid].cancel()
-            await user_tasks[sid]
 
         del transcribe_queue[sid]
         del user_tasks[sid]
@@ -263,4 +360,4 @@ async def handle_stop_chat(sid):
         del stop_event_list[sid]
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=5001)
+    uvicorn.run(app, host="0.0.0.0", port=5000)
