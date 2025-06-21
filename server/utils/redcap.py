@@ -185,7 +185,7 @@ def get_screening_prettify(record):
         "age": AGE[parsed.get("r_age")],
         "race": races,
         "ethnicity": "Hispanic" if parsed.get("r_e", "") == "1" else "Non-Hispanic",
-        "technological_skill": TECHNOLOGICAL_SKILL.get(parsed.get("r_ts", "1"), "Not specified"),
+        "technological_skill": TECHNOLOGICAL_SKILL.get(parsed.get("r_t", "1"), "Not specified"),
         "patient_or_clinician": "Patient" if parsed.get("r_pc", "1") == "1" else "Clinician" if parsed.get("r_pc") == 2 else "Neither",
         "screening_complete": parsed.get("screening_complete", "0")
     }
@@ -226,7 +226,7 @@ def get_screening_prettify(record):
             "6": "Psychiatry",
             "7": "Obstetrics / Gynecology",
             "8": "Other"
-        }.get(parsed.get("r_sp", "8"), "Not specified")
+        }.get(parsed.get("r_s", "8"), "Not specified")
 
     return filtered
 
@@ -298,4 +298,4 @@ def get_patient_previsit(record):
 
     return filtered
 
-print(get_patient_previsit(2))
+print(get_screening_prettify(1))
