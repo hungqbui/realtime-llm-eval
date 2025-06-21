@@ -152,6 +152,7 @@ async def transcribe(sid):
     while not transcribe_stop_list[sid].is_set():
         pcm = await transcribe_queue[sid].get()
         online_map[sid].insert_audio_chunk(pcm)
+        print(pcm)
         if transcribe_stop_list[sid].is_set():
             print(online_map[sid].finish())
             break
