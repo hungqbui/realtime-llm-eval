@@ -241,7 +241,6 @@ function App() {
   }, [isRecording, titleSet]);
 
   const startRecording = async () => {
-    console.log("Starting recording...");
     stream.current = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
 
     audioCtx.current = new AudioContext({ sampleRate: 16000 });
@@ -266,7 +265,6 @@ function App() {
     
     processor.current.onaudioprocess = async (e) => {
       const data = e.inputBuffer.getChannelData(0);
-      console.log(data)
       sendChunkToServer(data);
     };
     input.current?.connect(processor.current);

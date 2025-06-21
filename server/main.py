@@ -129,7 +129,6 @@ async def face_recognition(sid, data):
 @sio.on("audio")
 async def handle_audio(sid, data):
     global transcribe_queue
-    print(f"Received audio data for session {sid}")
     try:
         pcm = np.frombuffer(data["audio_data"], dtype=np.float32)
         await transcribe_queue[sid].put(pcm)
@@ -150,21 +149,21 @@ async def transcribe(sid):
     done = False
     if (not os.path.isdir(f"./videos/{session_name[sid]}")):
         os.makedirs(f"./videos/{session_name[sid]}")
-        while not done:
-            pcm = await transcribe_queue[sid].get()
-            online_map[sid].insert_audio_chunk(pcm)
-            if not pcm:
-                print(online_map[sid].finish())
-                done = True
-                break
-            
-            loop = asyncio.get_event_loop()
-            ans = await loop.run_in_executor(executor, online_map[sid].process_iter)
-            if ans[2]:
-                with open(f"./videos/{session_name[sid]}/transcription.txt", 'a') as f:
-                    f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - ")
-                    f.write(f"{ans[2]}")
-                await sio.emit("audio_ans", {"text": ans[2]}, to=sid)
+    while not done:
+        pcm = await transcribe_queue[sid].get()
+        online_map[sid].insert_audio_chunk(pcm)
+        if not pcm:
+            print(online_map[sid].finish())
+            done = True
+            break
+        
+        loop = asyncio.get_event_loop()
+        ans = await loop.run_in_executor(executor, online_map[sid].process_iter)
+        if ans[2]:
+            with open(f"./videos/{session_name[sid]}/transcription.txt", 'a') as f:
+                f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - ")
+                f.write(f"{ans[2]}")
+            await sio.emit("audio_ans", {"text": ans[2]}, to=sid)
 
 # Socket.IO event handler to start the transcription process for a user session.
 @sio.on("start")
