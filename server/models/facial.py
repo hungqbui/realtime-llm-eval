@@ -1,9 +1,7 @@
 # Load model directly
 from transformers import AutoImageProcessor, AutoModelForImageClassification
 import torch
-# from deepface import DeepFace
 import numpy as np
-# import tensorflow as tf
 
 # Initialize processor and model once at module level
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -41,16 +39,4 @@ def predict(image):
 
     return top
 
-# def predict(image):
-#     """Return a classification result for a given image from the webcam image"""
-    
-#     objs = DeepFace.analyze(np.array(image), actions=['emotion'], enforce_detection=False, detector_backend='mediapipe')
 
-#     if objs:
-#         emotions = objs[0]["emotion"]
-#         formatted = [(prob, emotion) for emotion, prob in emotions.items()]
-
-#         top_3 = sorted(formatted, key=lambda x: x[0], reverse=True)[:3]
-#         return [(prob.item(), emotion) for prob, emotion in top_3]  # Filter out low probabilities
-#     else:
-#         return "NONE"

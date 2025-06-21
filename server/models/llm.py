@@ -3,8 +3,6 @@ from langchain_core.tools import Tool, tool
 from langgraph.prebuilt import create_react_agent, ToolNode
 from langchain_community.chat_models import ChatLlamaCpp
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-from langchain_core.output_parsers import PydanticToolsParser
-from langchain_google_genai import ChatGoogleGenerativeAI
 import os
 
 load_dotenv("/data/qbui2/proj/dev/realtime-llm-eval/.env")
@@ -40,7 +38,7 @@ except Exception as e:
     print(f"Error loading LLM model: {e}")
     llm = None
 
-def llm_answer(question, history=None, context=None, emotions=None):
+def llm_answer(question, history=None, context=None, emotions=None, patient_info=None):
     """
     Function to get an answer from the LLM model based on the question and optional history.
     Args:
@@ -48,6 +46,7 @@ def llm_answer(question, history=None, context=None, emotions=None):
         history (list, optional): A list of previous messages in the conversation.
         context (str, optional): Additional context for the LLM.
         emotions (dict, optional): List of detected emotions at different timestamps.
+        patient_info (dict, optional): Information about the patient.
     Returns:
         Generator: A generator that yields messages from the LLM.
     """
@@ -71,7 +70,7 @@ def llm_answer(question, history=None, context=None, emotions=None):
     ] if history else []
         
     out = agent.stream({"messages": [
-            SystemMessage(content="You are a medical assistant that works alongside a clinical professional to provide medical recommendations based on the patient's symptoms and history. You are not a doctor, but you can provide useful information and recommendations to help the doctor make a decision."),
+            SystemMessage(content=f"You are a medical assistant that works alongside a clinical professional to provide medical recommendations based on the patient's symptoms and history. You are not a doctor, but you can provide useful information and recommendations to help the doctor make a decision. {("Here's some information to consider: " + str(patient_info)) if patient_info else ""}"),
             HumanMessage(content=f"There's an ongoing conversation which has been transcribed: {context}" if context else "There is no transcription provided." + f"\n{emotion_context if emotions else ''}"),
             AIMessage(content=f"Thank you for the information I'm now ready to give you personalized medical recommendations."),
 

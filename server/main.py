@@ -31,9 +31,9 @@ app = cors(app, allow_origin="*")
 import argparse
 
 parser = argparse.ArgumentParser(description="Run the real-time ASR server.")
-parser.add_argument("--modelsize", type=str, default="small", help="Size of the Whisper model to use (e.g., 'tiny', 'base', 'small', 'medium', 'large').")
+parser.add_argument("--model", type=str, default="small", help="Size of the Whisper model to use (e.g., 'tiny', 'base', 'small', 'medium', 'large').")
 
-model = parser.parse_args().modelsize
+model = parser.parse_args().model
 
 asr = FasterWhisperASR(lan="auto",modelsize=model)
 
@@ -52,59 +52,25 @@ transcribe_queue = defaultdict(asyncio.Queue)
 session_name = defaultdict(str)
 user_tasks = defaultdict(asyncio.Task)
 stop_event_list = defaultdict(asyncio.Event)
+transcribe_stop_list = defaultdict(asyncio.Event)
 online_map = defaultdict(OnlineASRProcessor)
 
-@app.route('/api/get_folders', methods=['GET'])
+@app.route('/api/get_records', methods=['GET'])
 async def get_folders():
     """
-    Endpoint to get the list of folders in the REDCap file repository.
+    Endpoint to get the list of records in the REDCap database.
     """
-    from utils.redcap import list_folders
+    from utils.redcap import list_records
     try:
-        folders = await asyncio.to_thread(list_folders)
-        return jsonify(folders)
+        records = list_records()
+
+        records = list(map(lambda x: x.get("record_id"), records))  # Convert to empty dicts to avoid sending sensitive data
+
+        return jsonify(records)
     except Exception as e:
-        print(f"Error getting folders: {e}")
-        return jsonify({"error": "Failed to retrieve folders"}), 500
+        print(f"Error getting records: {e}")
+        return jsonify({"error": "Failed to retrieve records"}), 500
 
-@app.route("/api/get_data/<patient_name>", methods=["GET"])
-async def get_data(patient_name):
-    """
-    Endpoint to get the data for a specific patient from the REDCap file repository.
-    """
-    from utils.redcap import list_folders, get_id_from_name
-    try:
-        folder_id = get_id_from_name(patient_name)
-        files = list_folders(folder_id=folder_id)
-
-        filenames = []
-        for x in files:
-            if "doc_id" in x and x["name"][-5:] == ".webm":
-                filenames.append(x)
-
-        return jsonify(filenames)
-    except Exception as e:
-        print(f"Error getting data for {patient_name}: {e}")
-        return jsonify({"error": "Failed to retrieve data"}), 500
-
-@app.route("/api/get_file/<doc_id>", methods=["GET"])
-async def get_file_route(doc_id):
-    from utils.redcap import get_file
-    content = get_file(doc_id)
-    return Response(content, mimetype="video/webm")
-
-@app.route("/api/delete_document/<doc_id>", methods=["DELETE"])
-async def delete_document(doc_id):
-    """
-    Endpoint to delete a document from the REDCap file repository.
-    """
-    from utils.redcap import delete_document
-    try:
-        delete_document(doc_id)
-        return jsonify({"message": "Document deleted successfully"}), 200
-    except Exception as e:
-        print(f"Error deleting document {doc_id}: {e}")
-        return jsonify({"error": "Failed to delete document"}), 500
 
 @app.route("/api/delete_data/<patient_name>", methods=["DELETE"])
 async def delete_data(patient_name):
@@ -119,22 +85,6 @@ async def delete_data(patient_name):
         print(f"Error deleting data for {patient_name}: {e}")
         return jsonify({"error": "Failed to delete data"}), 500
 
-@app.route("/api/create_patient", methods=["POST"])
-async def create_patient():
-    """
-    Endpoint to create a new patient folder in the REDCap file repository.
-    The patient name is provided in the request body.
-    """
-    from utils.redcap import create_folder
-    data = await request.get_json()
-    patient_name = data.get("patientName", "Unnamed Patient")
-
-    try:
-        folder_id = create_folder(patient_name)
-        return jsonify({"folder_id": folder_id, "message": "Patient folder created successfully"}), 201
-    except Exception as e:
-        print(f"Error creating patient folder: {e}")
-        return jsonify({"error": "Failed to create patient folder"}), 500
 
 # Bind the Socket.IO server to the Quart app.
 app = socketio.ASGIApp(sio, app)
@@ -158,11 +108,14 @@ async def face_recognition(sid, data):
         loop = asyncio.get_event_loop()
 
         top = await loop.run_in_executor(executor, predict, Image.open(io.BytesIO(data["image_data"])))
-
-        # top = [(0.95, 'happy'), (0.03, 'sad'), (0.01, 'angry')]
+        if (not os.path.isdir(f"./videos/{session_name[sid]}")):
+            os.makedirs(f"./videos/{session_name[sid]}")
 
         if top == "NONE":
             return
+        
+        with open(f"./videos/{session_name[sid]}/expressionlog.txt", 'a') as f:
+            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - {top}\n")
 
         await sio.emit("face_recognition_ans", {
             "message": top
@@ -187,28 +140,29 @@ async def handle_audio(sid, data):
 # Video handler that saves incoming video data to a file.
 @sio.on("video")
 async def handle_video(sid, data):
-    with open(f"videos/video_{sid}.webm", 'ab') as f:
+    if (not os.path.isdir(f"./videos/{session_name[sid]}")):
+        os.makedirs(f"./videos/{session_name[sid]}")
+    with open(f"./videos/{session_name[sid]}/video_{sid}.webm", 'ab') as f:
         f.write(data["video_data"])
 
 # Asynchronous consummer that processes audio data from the transcribe queue, performs transcription, and emits the results back to the client.
 async def transcribe(sid):
-    done = False
-
-    while not done:
-        pcm = await transcribe_queue[sid].get()
-        online_map[sid].insert_audio_chunk(pcm)
-        if pcm is None:
-            done = True
-            print(online_map[sid].finish())
-            break
-        
-        loop = asyncio.get_event_loop()
-        ans = await loop.run_in_executor(executor, online_map[sid].process_iter)
-        if ans[2]:
-            await sio.emit("audio_ans", {"text": ans[2]}, to=sid)
-
-        transcribe_queue[sid].task_done()
-
+    if (not os.path.isdir(f"./videos/{session_name[sid]}")):
+        os.makedirs(f"./videos/{session_name[sid]}")
+        while not transcribe_stop_list[sid].is_set():
+            pcm = await transcribe_queue[sid].get()
+            online_map[sid].insert_audio_chunk(pcm)
+            if transcribe_stop_list[sid].is_set():
+                print(online_map[sid].finish())
+                break
+            
+            loop = asyncio.get_event_loop()
+            ans = await loop.run_in_executor(executor, online_map[sid].process_iter)
+            if ans[2]:
+                with open(f"./videos/{session_name[sid]}/transcription.txt", 'a') as f:
+                    f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - ")
+                    f.write(f"{ans[2]}")
+                await sio.emit("audio_ans", {"text": ans[2]}, to=sid)
 
 # Socket.IO event handler to start the transcription process for a user session.
 @sio.on("start")
@@ -219,7 +173,7 @@ async def start_up(sid):
     print("Starting up")
 
     transcribe_queue[sid] = asyncio.Queue()
-
+    transcribe_stop_list[sid] = asyncio.Event()
     user_tasks[sid] = sio.start_background_task(transcribe, sid)
 
 @sio.on("session_name")
@@ -232,7 +186,7 @@ async def handle_session_name(sid, data):
 
     # Store the session name in the global dictionary.
     session_name[sid] = data.get("session_name", "unnamed_session")
-    print(data)
+
     print(f"Session name for {sid} set to {session_name[sid]}")
 
     await sio.emit("session_name_set", {"session_name": session_name[sid]}, to=sid)
@@ -242,13 +196,11 @@ async def handle_session_name(sid, data):
 async def handle_stop(sid):
     global transcribe_queue, user_tasks
 
-    print("stopping")
-    from utils.redcap import upload_file
-    upload_file(f"{os.getcwd()}/videos/video_{sid}.webm", session_name[sid])
     # Cancel the transcription task for the user session if it is running.
     if user_tasks.get(sid):
         if user_tasks[sid] and not user_tasks[sid].done():
             transcribe_queue[sid].put_nowait(None)  # Signal the transcription task to stop
+            transcribe_stop_list[sid].set()  # Set the stop event to signal the task to stop
             user_tasks[sid].cancel()
 
         del transcribe_queue[sid]
@@ -261,26 +213,43 @@ async def handle_stop(sid):
 async def handle_chat_message(sid, data):
     print(f"Received chat message from {sid}: {data}")
 
+    from utils.redcap import get_screening_prettify, get_patient_previsit
     loop = asyncio.get_event_loop()
+    screening = get_screening_prettify(session_name[sid])
+    previsit = get_patient_previsit(session_name[sid])
+        
+    combined = {
+        "screening": screening if screening["screening_complete"] == "2" else None,
+        "previsit": previsit if previsit and previsit["patient_previsit_complete"] == "2" else None
+    }
 
-    out = await loop.run_in_executor(executor, llm_answer, data['message'], data.get('history', None), data.get('transcription', None), data.get("emotions", None))
+    if (not os.path.isdir(f"./videos/{session_name[sid]}")):
+        os.makedirs(f"./videos/{session_name[sid]}")
+
+    with open(f"./videos/{session_name[sid]}/chatlog.txt", 'a') as f:
+        f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - User: {data['message']}\n\n")
+
+    out = await loop.run_in_executor(executor, llm_answer, data['message'], data.get('history', None), data.get('transcription', None), data.get("emotions", None), combined)
 
     # Conditional var to handle stopping the stream based on client request.
     stop_event_list[sid] = asyncio.Event()
 
     async def _stream_llm(sid, out, stop_event):
-        for chunk in out:
-            if stop_event.is_set():
-                print(f"Stream for SID {sid} cancelled by client request.")
+        with open(f"./videos/{session_name[sid]}/chatlog.txt", 'a') as f:
+            f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - AI:")
+            for chunk in out:
+                if stop_event.is_set():
+                    print(f"Stream for SID {sid} cancelled by client request.")
 
-                # This emits when the stream is stopped by the client.
-                await sio.emit("stream_end", {"message": "BREAK"}, to=sid)
-                return  # Exit the loop if the stop event is set
-            
-            # Check if the chunk is an AIMessageChunk and emit the content to the client (chunk might also be ToolMessageChunk from the search tool)
-            if isinstance(chunk[0], AIMessageChunk):
-                await sio.emit("chat_response", {"message": chunk[0].content}, to=sid)
-
+                    # This emits when the stream is stopped by the client.
+                    await sio.emit("stream_end", {"message": "BREAK"}, to=sid)
+                    return  # Exit the loop if the stop event is set
+                
+                # Check if the chunk is an AIMessageChunk and emit the content to the client (chunk might also be ToolMessageChunk from the search tool)
+                if isinstance(chunk[0], AIMessageChunk):
+                    f.write(f"{chunk[0].content}")
+                    await sio.emit("chat_response", {"message": chunk[0].content}, to=sid)
+            f.write("\n\n")
         # This is emit when the stream completes
         await sio.emit("stream_end", {"message": "END"}, to=sid)
 
@@ -296,4 +265,4 @@ async def handle_stop_chat(sid):
         del stop_event_list[sid]
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=5001)
+    uvicorn.run(app, host="0.0.0.0", port=5000)

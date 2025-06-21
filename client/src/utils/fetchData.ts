@@ -1,6 +1,6 @@
 const fetchPatients = async () => {
     try {
-        const response = await fetch('/api/get_folders');
+        const response = await fetch('/api/get_records');
         if (!response.ok) {
             throw new Error('Network response was not ok');
         }

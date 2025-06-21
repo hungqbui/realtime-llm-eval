@@ -313,6 +313,24 @@ function App() {
     setWaitingForResponse(true);
   }
 
+  const handleTitle = () => {
+
+    if (!/^\d+$/.test(title.trim())) {
+      alert("Record ID should only contain numbers");
+      return;
+    }
+    if (title.trim() === "") {
+      alert("Please enter a valid Record ID");
+      return;
+    }
+    if (!folders.includes(title.trim())) {
+      alert("Record ID does not exist");
+      return;
+    }
+
+    setTitleSet(true);
+  }
+
   if (titleSet)
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", width: "100vw" }}>
@@ -321,7 +339,7 @@ function App() {
           top: "30px",
           left: "30px",
           padding: "8px 16px",
-          backgroundColor: "#2323ff",
+          backgroundColor: "#332D56",
           border: "1px solid #ccc",
           borderRadius: "4px",
           cursor: "pointer"
@@ -390,38 +408,17 @@ function App() {
   else return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", width: "100vw" }}>
         <div>
-          <h2>Choose a session to continue</h2>
-          <ul>
-            { folders.length != 0 ? folders.map(folder => (
-              <li key={folder.id}>{folder.name} <button onClick={() => {
-                setTitle(folder.name);
-                setTitleSet(true);
-              }}>Continue</button></li>
-            )) : <li>No sessions available</li> }
-          </ul>
-          <h3>Or create a new session</h3>
-          <input type="text" placeholder='Create new session' value={title} onChange={(e) => setTitle(e.target.value)} />
-          <button onClick={async () => {
-            if (title.trim() === "") {
-              alert("Please enter a session title");
-              return;
+          <h2>Enter Record ID:</h2>
+          <input onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              handleTitle();
             }
-            if (title.includes(" ")) {
-              alert("Session title cannot contain spaces. Please choose a different name.");
-              return;
-            }
-
-            const folderNames = folders.map(folder => folder.name.toLowerCase());
-            if (folderNames.includes(title.toLowerCase())) {
-              alert("Session with this name already exists. Please choose a different name.");
-              return;
-            }
-            await fetchTool.createPatient(title);
-            // Update the ui
-            const newFolders = await fetchTool.fetchPatients();
-            setFolders(newFolders);
-            setTitleSet(true);
-          }}>Create</button>
+          }} type="text" value={title} onChange={(e) => {
+            setTitle(e.target.value);
+          }} />
+          <button onClick={() => {
+            handleTitle();
+          }}>Submit</button>
         </div>
     </div>
   )
