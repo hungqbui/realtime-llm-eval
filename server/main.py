@@ -129,7 +129,7 @@ async def face_recognition(sid, data):
 @sio.on("audio")
 async def handle_audio(sid, data):
     global transcribe_queue
-
+    print(f"Received audio data for session {sid}")
     try:
         pcm = np.frombuffer(data["audio_data"], dtype=np.float32)
         await transcribe_queue[sid].put(pcm)
