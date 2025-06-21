@@ -148,13 +148,12 @@ async def handle_video(sid, data):
 async def transcribe(sid):
     if (not os.path.isdir(f"./videos/{session_name[sid]}")):
         os.makedirs(f"./videos/{session_name[sid]}")
-        
+
     while not transcribe_stop_list[sid].is_set():
         pcm = await transcribe_queue[sid].get()
         online_map[sid].insert_audio_chunk(pcm)
-        if not pcm or transcribe_stop_list[sid].is_set():
+        if transcribe_stop_list[sid].is_set():
             print(online_map[sid].finish())
-            done = True
             break
         
         loop = asyncio.get_event_loop()
