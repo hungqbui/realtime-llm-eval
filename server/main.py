@@ -147,13 +147,15 @@ async def handle_video(sid, data):
 
 # Asynchronous consummer that processes audio data from the transcribe queue, performs transcription, and emits the results back to the client.
 async def transcribe(sid):
+    done = False
     if (not os.path.isdir(f"./videos/{session_name[sid]}")):
         os.makedirs(f"./videos/{session_name[sid]}")
-        while not transcribe_stop_list[sid].is_set():
+        while not done:
             pcm = await transcribe_queue[sid].get()
             online_map[sid].insert_audio_chunk(pcm)
-            if transcribe_stop_list[sid].is_set():
+            if not pcm:
                 print(online_map[sid].finish())
+                done = True
                 break
             
             loop = asyncio.get_event_loop()
