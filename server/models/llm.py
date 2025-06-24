@@ -69,18 +69,15 @@ def llm_answer(question, history=None, context=None, emotions=None, patient_info
         for h in history
     ] if history else []
         
-    out = agent.stream({"messages": [
+    out = llm.stream([
             SystemMessage(content=f"You are a medical assistant that works alongside a clinical professional to provide medical recommendations based on the patient's symptoms and history. You are not a doctor, but you can provide useful information and recommendations to help the doctor make a decision. {("Here's some information to consider: " + str(patient_info)) if patient_info else ""}"),
             HumanMessage(content=f"There's an ongoing conversation which has been transcribed: {context}" if context else "There is no transcription provided." + f"\n{emotion_context if emotions else ''}"),
             AIMessage(content=f"Thank you for the information I'm now ready to give you personalized medical recommendations."),
 
             *(formatted_history),
             HumanMessage(content=question)
-        ]},
-        stream_mode="messages", # For token level streaming (not possible without custom _stream method in LlamaCpp class)
-        config={
-            "recursion_limit": 100,
-        }
+        ],
+        # stream_mode="messages", # For token level streaming (not possible without custom _stream method in LlamaCpp class)
     )
 
     return out

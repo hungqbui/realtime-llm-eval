@@ -160,8 +160,8 @@ async def transcribe(sid):
         ans = await loop.run_in_executor(executor, online_map[sid].process_iter)
         if ans[2]:
             with open(f"./videos/{session_name[sid]}/transcription.txt", 'a') as f:
-                f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - ")
-                f.write(f"{ans[2]}")
+                f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} > ")
+                f.write(f"{ans[2]}\n")
             await sio.emit("audio_ans", {"text": ans[2]}, to=sid)
 
 # Socket.IO event handler to start the transcription process for a user session.
@@ -246,10 +246,12 @@ async def handle_chat_message(sid, data):
                     return  # Exit the loop if the stop event is set
                 
                 # Check if the chunk is an AIMessageChunk and emit the content to the client (chunk might also be ToolMessageChunk from the search tool)
-                if isinstance(chunk[0], AIMessageChunk):
-                    f.write(f"{chunk[0].content}")
-                    await sio.emit("chat_response", {"message": chunk[0].content}, to=sid)
-            f.write("\n\n")
+                # if isinstance(chunk[0], AIMessageChunk):
+                #     f.write(f"{chunk[0].content}")
+                #     await sio.emit("chat_response", {"message": chunk[0].content}, to=sid)
+                f.write(chunk.text)
+                await sio.emit("chat_response", {"message": chunk.text}, to=sid)
+            f.write("\n")
         # This is emit when the stream completes
         await sio.emit("stream_end", {"message": "END"}, to=sid)
 
