@@ -79,7 +79,7 @@ def llm_answer(question, history=None, context=None, emotions=None, patient_info
         ]},
         stream_mode="messages", # For token level streaming (not possible without custom _stream method in LlamaCpp class)
         config={
-            "recursion_limit": 5,
+            "recursion_limit": 100,
         }
     )
 
