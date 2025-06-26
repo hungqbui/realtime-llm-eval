@@ -258,7 +258,7 @@ def get_patient_previsit(record):
     }
     r = requests.post(URL, data=data)
     parsed = r.json()[0]
-
+    print(parsed)
     behaviors = []
     for b in BEHAVIORS:
         if parsed.get(b, "0") == "1":
@@ -297,5 +297,3 @@ def get_patient_previsit(record):
     }
 
     return filtered
-
-print(get_screening_prettify(1))

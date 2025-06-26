@@ -4,35 +4,49 @@ from langgraph.prebuilt import create_react_agent, ToolNode
 from langchain_community.chat_models import ChatLlamaCpp
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 import os
+from langchain_google_genai import ChatGoogleGenerativeAI
 
 load_dotenv("/data/qbui2/proj/dev/realtime-llm-eval/.env")
 
 from langchain_community.utilities import GoogleSerperAPIWrapper
 
-# TODO: Had to rewrote a lot of the ChatLlamaCpp class from LangChain, and use a non-merge PR for llama-cpp-python to use "auto" tool choice. Reminder to keep the libraries up to date. 
+# TODO: Had to rewrote a lot of the ChatLlamaCpp class from LangChain, and use an unmerged PR for llama-cpp-python to use "auto" tool choice. Reminder to keep the libraries up to date. 
 
 try:
     
     # Initialize the LLM model with the specified parameters.
-    llm = ChatLlamaCpp(
-        model_path="/data/qbui2/proj/dev/realtime-llm-eval/server/models/saves/medgemma-27b-text-it-Q6_K.gguf",
+    # llm = ChatLlamaCpp(
+    #     model_path="/data/qbui2/proj/dev/realtime-llm-eval/server/models/saves/gemma-3-4b-it-UD-Q8_K_XL.gguf",
+    #     n_batch=512,
+    #     verbose=False,
+    #     n_ctx=131072, # Set up to 131072
+    #     n_gpu_layers=-1,
+    #     max_tokens=1024,
+    #     temperature=0.1,
+    #     n_threads=4,
+    # )
+
+    from llama_cpp import Llama
+    llm = Llama(
+        model_path="/data/qbui2/proj/dev/realtime-llm-eval/server/models/saves/medgemma-4b-it-UD-Q8_K_XL.gguf",
         n_batch=512,
         verbose=False,
-        n_ctx=131072, # Set up to 131072
+        n_ctx=131072,  # Set up to 131072
         n_gpu_layers=-1,
         max_tokens=1024,
         temperature=0.1,
+        n_threads=4,
     )
 
     # Search tool using SerpAPI
-    search = GoogleSerperAPIWrapper()
-    tools = [
-        Tool(name="search_answer", func=search.run, description="Useful when you need search the internet to answer questions about latest information."),
-    ]
+    # search = GoogleSerperAPIWrapper()
+    # tools = [
+    #     Tool(name="search_answer", func=search.run, description="Useful when you need search the internet to answer questions about latest information."),
+    # ]
 
-    # Bind the tools to the LLM and create a ReAct agent.
-    llm_with_tools = llm.bind_tools(tools, tool_choice="auto") # This is not possible without the custom LlamaCpp class
-    agent = create_react_agent(llm_with_tools, tools=tools)
+    # # Bind the tools to the LLM and create a ReAct agent.
+    # llm_with_tools = llm.bind_tools(tools, tool_choice="auto") # This is not possible without the custom LlamaCpp class
+    # agent = create_react_agent(llm_with_tools, tools=tools)
 
 except Exception as e:
     print(f"Error loading LLM model: {e}")
@@ -52,31 +66,40 @@ def llm_answer(question, history=None, context=None, emotions=None, patient_info
     """
 
     emotion_context = f"The user across the dialogue has shown the following emotions: \n"
+    if emotions:
+        for emotion in emotions:
+            emotion_context += f"At time {emotion['time']} combination of:\n"
+            for e in emotion["emotions"]:
+                emotion_context += f" {e["name"]} with probability {e['score']:.2f}.\n"
 
-    for emotion in emotions:
-        emotion_context += f"At time {emotion['time']} combination of:\n"
-        for e in emotion["emotions"]:
-            emotion_context += f" {e["name"]} with probability {e['score']:.2f}.\n"
-
-    emotion_context += "Combine this information with the timeline of the transcription to add details about possible underlying problems with the patient report.\n"
+        emotion_context += "Combine this information with the timeline of the transcription to add details about possible underlying problems with the patient report.\n"
 
 
     formatted_history = [
 
-        HumanMessage(content=h["content"]) if h.get("type") == "User" else
-        AIMessage(content=h["content"])
+        {
+            "role": "assistant" if h["type"] == "AI" else "user",
+            "content": h["content"],
+        }
 
         for h in history
     ] if history else []
-        
-    out = llm.stream([
-            SystemMessage(content=f"You are a medical assistant that works alongside a clinical professional to provide medical recommendations based on the patient's symptoms and history. You are not a doctor, but you can provide useful information and recommendations to help the doctor make a decision. {("Here's some information to consider: " + str(patient_info)) if patient_info else ""}"),
-            HumanMessage(content=f"There's an ongoing conversation which has been transcribed: {context}" if context else "There is no transcription provided." + f"\n{emotion_context if emotions else ''}"),
-            AIMessage(content=f"Thank you for the information I'm now ready to give you personalized medical recommendations."),
 
-            *(formatted_history),
-            HumanMessage(content=question)
-        ],
+    messages = [
+        {
+            "role": "system",
+            "content": f"""The AI is a medical assistant that works alongside a clinical professional to provide medical recommendations based on the patient's symptoms and history. The AI is not a doctor, but it can provide useful information and recommendations to help the doctor make a decision while providing reasoning on why it thinks that's the way to go based on the context, while keeping it concise for concise questions.\n{f'Conversation Context: \n\"{context}\"\n' if context else 'There is no transcription provided.'}{ f"\n{emotion_context if emotions else ''} "}{("\nPatient Background: " + str(patient_info)) if patient_info else ""}\nHere comes the back and forth dialogue.""",
+        },
+        *(formatted_history),
+        {
+            "role":"user",
+            "content": question
+        }
+    ]
+
+    out = llm.create_chat_completion(
+        messages=messages,
+        stream=True
         # stream_mode="messages", # For token level streaming (not possible without custom _stream method in LlamaCpp class)
     )
 

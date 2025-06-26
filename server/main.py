@@ -249,8 +249,10 @@ async def handle_chat_message(sid, data):
                 # if isinstance(chunk[0], AIMessageChunk):
                 #     f.write(f"{chunk[0].content}")
                 #     await sio.emit("chat_response", {"message": chunk[0].content}, to=sid)
-                f.write(chunk.content)
-                await sio.emit("chat_response", {"message": chunk.content}, to=sid)
+                if "choices" in chunk and "delta" in chunk["choices"][0] and "content" in chunk["choices"][0]["delta"]:
+                    print(chunk["choices"][0]["delta"]["content"], end="", flush=True)
+                    f.write(chunk["choices"][0]["delta"]["content"])
+                    await sio.emit("chat_response", {"message": chunk["choices"][0]["delta"]["content"]}, to=sid)
             f.write("\n")
         # This is emit when the stream completes
         await sio.emit("stream_end", {"message": "END"}, to=sid)
