@@ -28,14 +28,13 @@ try:
 
     from llama_cpp import Llama
     llm = Llama(
-        model_path="/data/qbui2/proj/dev/realtime-llm-eval/server/models/saves/medgemma-4b-it-UD-Q8_K_XL.gguf",
+        model_path="/data/qbui2/proj/dev/realtime-llm-eval/server/models/saves/Llama-4-Scout-17B-16E-Instruct-UD-IQ2_M.gguf",
         n_batch=512,
-        verbose=False,
-        n_ctx=131072,  # Set up to 131072
+        verbose=True,
+        n_ctx=100000,  # Set up to 1000000
         n_gpu_layers=-1,
-        max_tokens=1024,
+        max_tokens=512,
         temperature=0.1,
-        n_threads=4,
     )
 
     # Search tool using SerpAPI
@@ -75,27 +74,42 @@ def llm_answer(question, history=None, context=None, emotions=None, patient_info
         emotion_context += "Combine this information with the timeline of the transcription to add details about possible underlying problems with the patient report.\n"
 
 
-    formatted_history = [
+    formatted_history = ""
 
-        {
-            "role": "assistant" if h["type"] == "AI" else "user",
-            "content": h["content"],
-        }
-
-        for h in history
-    ] if history else []
+    for h in history:
+        if h["type"] == "User":
+            formatted_history += f"User: {h['content']}\n"
+        else:
+            formatted_history += f"AI: {h['content']}\n"
 
     messages = [
         {
             "role": "system",
-            "content": f"""The AI is a medical assistant that works alongside a clinical professional to provide medical recommendations based on the patient's symptoms and history. The AI is not a doctor, but it can provide useful information and recommendations to help the doctor make a decision while providing reasoning on why it thinks that's the way to go based on the context, while keeping it concise for concise questions.\n{f'Conversation Context: \n\"{context}\"\n' if context else 'There is no transcription provided.'}{ f"\n{emotion_context if emotions else ''} "}{("\nPatient Background: " + str(patient_info)) if patient_info else ""}\nHere comes the back and forth dialogue.""",
+            "content": f"""The AI is a medical assistant that works alongside a clinical professional to provide medical recommendations based on the patient's symptoms and history. The AI is not a doctor, but it can provide useful information and recommendations to help the doctor make a decision while providing reasoning on why it thinks that's the way to go based on the context.""",
         },
-        *(formatted_history),
         {
-            "role":"user",
-            "content": question
-        }
+            "role": "user",
+            "content": f"""
+
+            Chat history:
+            {formatted_history}
+
+            {f'Conversation Context: \n\"{context}\"\n' if context else 'There is no transcription provided.'}{ f"\n{emotion_context if emotions else ''} "}{("\nPatient Background: " + str(patient_info)) if patient_info else ""}\nHere comes the back and forth dialogue.
+
+            Question: {question}
+            """
+        },
+        # {
+        #     "role": "assistant",
+        #     "content": "Sure, I can help with that. Please go ahead and ask your question."
+        # }
+        # {
+        #     "role":"user",
+        #     "content": question
+        # }
     ]
+
+    print(f"Messages for LLM: {messages}")
 
     out = llm.create_chat_completion(
         messages=messages,

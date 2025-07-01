@@ -307,7 +307,7 @@ function App() {
     setMessages([...messages, {type: "User", content: message, time: getCurrentTime()}]);
     socket.emit("chat_message", { message, title, transcription: transcription.map((obj) => {
       return `${obj.time} ${obj.text}`;
-    }).join("\n"), history: messages.slice(-10), "emotions": emotions.slice(-30) });
+    }).join("\n"), history: messages.slice(-5), "emotions": emotions.slice(-30) });
     setMessage("");
     setWaitingForResponse(true);
   }
